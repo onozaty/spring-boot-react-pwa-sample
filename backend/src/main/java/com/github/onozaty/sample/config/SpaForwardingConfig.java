@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.web.servlet.function.RequestPredicate;
 import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.ServerResponse;
 
@@ -19,7 +20,7 @@ public class SpaForwardingConfig {
   RouterFunction<ServerResponse> spaRouter() {
     var index = new ClassPathResource("static/index.html");
     var staticResources = new ClassPathResource("static/");
-    var spaPredicate =
+    RequestPredicate spaPredicate =
         path("/api/**") // REST API
             .or(path("/error")) // Spring のエラーハンドリング
             .or(path("/swagger-ui.html")) // springdoc: SwaggerWelcomeWebMvc (リダイレクト元)

@@ -71,6 +71,8 @@ E2E テストは backend の `e2e` パッケージに配置し、通常の `test
 
 - Controller は Service 経由でデータアクセスすること。Controller が Mapper（MyBatis）を直接 `@Autowired` / コンストラクタインジェクションすることは禁止。
 - Service のメソッドは存在しないリソースを例外でなく `Optional` で返すこと。`UserNotFoundException` などのドメイン例外は Controller 側でスローする。
+- Service クラスには `@Transactional` をクラスレベルで付与すること。参照系メソッドには `@Transactional(readOnly = true)` を個別に付与して上書きする。更新系メソッドへの個別付与は不要。
+- ローカル変数の型宣言: `new` やクラス名が右辺に出現して型が自明な場合のみ `var` を使用する。メソッド呼び出しの戻り値など型が自明でない場合は明示的に型を書く。
 - TODO はユーザー所有リソースであり、Service 層で `userId` による所有権チェックを行う。
 
 ### API 型生成（frontend）

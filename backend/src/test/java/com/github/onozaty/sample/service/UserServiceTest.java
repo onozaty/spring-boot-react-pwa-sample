@@ -24,7 +24,7 @@ class UserServiceTest {
 
     // Act
     User created = userService.create(input);
-    User found = userService.findById(created.getId());
+    User found = userService.findById(created.getId()).orElseThrow();
 
     // Assert
     assertThat(created.getId()).isNotNull();
@@ -70,7 +70,7 @@ class UserServiceTest {
     updatedInput.setEmail("updated@example.com");
 
     // Act
-    User result = userService.update(created.getId(), updatedInput);
+    User result = userService.update(created.getId(), updatedInput).orElseThrow();
 
     // Assert
     assertThat(result.getId()).isEqualTo(created.getId());
@@ -91,14 +91,13 @@ class UserServiceTest {
     userService.delete(created.getId());
 
     // Assert
-    assertThatThrownBy(() -> userService.findById(created.getId()))
-        .isInstanceOf(UserNotFoundException.class);
+    assertThat(userService.findById(created.getId())).isEmpty();
   }
 
   @Test
   void testFindByIdNotFound() {
     // Act & Assert
-    assertThatThrownBy(() -> userService.findById(999L)).isInstanceOf(UserNotFoundException.class);
+    assertThat(userService.findById(999L)).isEmpty();
   }
 
   @Test
@@ -109,13 +108,12 @@ class UserServiceTest {
     input.setEmail("test@example.com");
 
     // Act & Assert
-    assertThatThrownBy(() -> userService.update(999L, input))
-        .isInstanceOf(UserNotFoundException.class);
+    assertThat(userService.update(999L, input)).isEmpty();
   }
 
   @Test
   void testDeleteNotFound() {
     // Act & Assert
-    assertThatThrownBy(() -> userService.delete(999L)).isInstanceOf(UserNotFoundException.class);
+    assertThat(userService.delete(999L)).isFalse();
   }
 }

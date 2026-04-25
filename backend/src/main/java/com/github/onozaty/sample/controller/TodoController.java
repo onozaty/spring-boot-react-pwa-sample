@@ -4,6 +4,7 @@ import com.github.onozaty.sample.domain.Todo;
 import com.github.onozaty.sample.domain.TodoCreateInput;
 import com.github.onozaty.sample.domain.TodoUpdateInput;
 import com.github.onozaty.sample.service.JwtTokenService;
+import com.github.onozaty.sample.service.TodoNotFoundException;
 import com.github.onozaty.sample.service.TodoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -83,7 +84,9 @@ public class TodoController {
       @Parameter(description = "TODO ID", required = true) @PathVariable Long id,
       @Valid @RequestBody TodoUpdateInput input) {
     Long userId = jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
-    return ResponseEntity.ok(todoService.update(userId, id, input));
+    Todo updated =
+        todoService.update(userId, id, input).orElseThrow(() -> new TodoNotFoundException(id));
+    return ResponseEntity.ok(updated);
   }
 
   @DeleteMapping("/{id}")
@@ -96,7 +99,9 @@ public class TodoController {
       @AuthenticationPrincipal Jwt jwt,
       @Parameter(description = "TODO ID", required = true) @PathVariable Long id) {
     Long userId = jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
-    todoService.delete(userId, id);
+    if (!todoService.delete(userId, id)) {
+      throw new TodoNotFoundException(id);
+    }
     return ResponseEntity.noContent().build();
   }
 }

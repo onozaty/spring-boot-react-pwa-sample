@@ -20,17 +20,17 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
 
-    var method = request.getMethod();
-    var uri = request.getRequestURI();
-    var query = request.getQueryString();
-    var path = query != null ? uri + "?" + query : uri;
+    String method = request.getMethod();
+    String uri = request.getRequestURI();
+    String query = request.getQueryString();
+    String path = query != null ? uri + "?" + query : uri;
 
     logger.info("Incoming: {} {}", method, path);
-    var startTime = System.currentTimeMillis();
+    long startTime = System.currentTimeMillis();
     try {
       filterChain.doFilter(request, response);
     } finally {
-      var elapsed = System.currentTimeMillis() - startTime;
+      long elapsed = System.currentTimeMillis() - startTime;
       logger.info("Outgoing: {} {} {} ({}ms)", method, path, response.getStatus(), elapsed);
     }
   }

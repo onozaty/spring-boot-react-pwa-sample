@@ -1,6 +1,7 @@
 package com.github.onozaty.sample.service;
 
 import com.github.onozaty.sample.config.JwtProperties;
+import com.github.onozaty.sample.domain.RefreshToken;
 import com.github.onozaty.sample.domain.Session;
 import com.github.onozaty.sample.mapper.RefreshTokenMapper;
 import com.github.onozaty.sample.mapper.SessionMapper;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Transactional
 public class AuthService {
 
   private final UserCredentialMapper credentialMapper;
@@ -39,7 +41,6 @@ public class AuthService {
     this.jwtProperties = jwtProperties;
   }
 
-  @Transactional
   public void changePassword(
       Long userId, String currentSessionId, String currentPassword, String newPassword) {
     String currentHash =
@@ -63,26 +64,26 @@ public class AuthService {
     return sessionMapper.findById(sessionId);
   }
 
-  @Transactional
   public String createSession(Long userId) {
     String sessionId = UUID.randomUUID().toString();
     sessionMapper.insert(sessionId, userId);
     return sessionId;
   }
 
-  @Transactional
   public String issueRefreshToken(String sessionId) {
     String plainToken = UUID.randomUUID().toString();
     String tokenHash = sha256(plainToken);
+
     OffsetDateTime expiresAt = OffsetDateTime.now().plusDays(jwtProperties.refreshExpirationDays());
     refreshTokenMapper.insert(sessionId, tokenHash, expiresAt);
+
     return plainToken;
   }
 
-  @Transactional
   public String validateAndRotateRefreshToken(String plainToken) {
     String tokenHash = sha256(plainToken);
-    var refreshToken =
+
+    RefreshToken refreshToken =
         refreshTokenMapper
             .findByTokenHash(tokenHash)
             .orElseThrow(() -> new InvalidRefreshTokenException());
@@ -103,12 +104,10 @@ public class AuthService {
     return refreshToken.getSessionId();
   }
 
-  @Transactional
   public void revokeSession(String sessionId) {
     sessionMapper.deleteById(sessionId);
   }
 
-  @Transactional
   public int cleanupExpiredSessions() {
     return sessionMapper.deleteExpired();
   }

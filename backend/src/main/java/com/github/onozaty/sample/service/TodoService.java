@@ -5,6 +5,7 @@ import com.github.onozaty.sample.domain.TodoCreateInput;
 import com.github.onozaty.sample.domain.TodoUpdateInput;
 import com.github.onozaty.sample.mapper.TodoMapper;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,18 +28,11 @@ public class TodoService {
     return todoMapper.insert(userId, input);
   }
 
-  public Todo update(Long userId, Long todoId, TodoUpdateInput input) {
-    Todo updated = todoMapper.update(todoId, userId, input);
-    if (updated == null) {
-      throw new TodoNotFoundException(todoId);
-    }
-    return updated;
+  public Optional<Todo> update(Long userId, Long todoId, TodoUpdateInput input) {
+    return Optional.ofNullable(todoMapper.update(todoId, userId, input));
   }
 
-  public void delete(Long userId, Long todoId) {
-    int deleted = todoMapper.delete(todoId, userId);
-    if (deleted == 0) {
-      throw new TodoNotFoundException(todoId);
-    }
+  public boolean delete(Long userId, Long todoId) {
+    return todoMapper.delete(todoId, userId) > 0;
   }
 }

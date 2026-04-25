@@ -105,7 +105,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .map(
                 fe -> new ValidationProblemDetail.FieldError(fe.getField(), fe.getDefaultMessage()))
             .toList();
-    var problemDetail = ex.getBody();
+
+    ProblemDetail problemDetail = ex.getBody();
     var body =
         new ValidationProblemDetail(
             problemDetail.getTitle(),

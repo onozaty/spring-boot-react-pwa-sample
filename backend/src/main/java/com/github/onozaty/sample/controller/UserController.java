@@ -3,6 +3,7 @@ package com.github.onozaty.sample.controller;
 import com.github.onozaty.sample.domain.User;
 import com.github.onozaty.sample.domain.UserCreateInput;
 import com.github.onozaty.sample.domain.UserUpdateInput;
+import com.github.onozaty.sample.service.UserNotFoundException;
 import com.github.onozaty.sample.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -51,7 +52,8 @@ public class UserController {
   })
   public ResponseEntity<User> findById(
       @Parameter(description = "ユーザーID", required = true) @PathVariable Long id) {
-    return ResponseEntity.ok(userService.findById(id));
+    return ResponseEntity.ok(
+        userService.findById(id).orElseThrow(() -> new UserNotFoundException(id)));
   }
 
   @PostMapping
@@ -88,7 +90,8 @@ public class UserController {
   public ResponseEntity<User> update(
       @Parameter(description = "ユーザーID", required = true) @PathVariable Long id,
       @Valid @RequestBody UserUpdateInput input) {
-    return ResponseEntity.ok(userService.update(id, input));
+    return ResponseEntity.ok(
+        userService.update(id, input).orElseThrow(() -> new UserNotFoundException(id)));
   }
 
   @DeleteMapping("/{id}")
@@ -99,7 +102,9 @@ public class UserController {
   })
   public ResponseEntity<Void> delete(
       @Parameter(description = "ユーザーID", required = true) @PathVariable Long id) {
-    userService.delete(id);
+    if (!userService.delete(id)) {
+      throw new UserNotFoundException(id);
+    }
     return ResponseEntity.noContent().build();
   }
 }

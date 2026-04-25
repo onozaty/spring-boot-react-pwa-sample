@@ -45,8 +45,8 @@ public class JwtTokenService {
   }
 
   public String issueAccessToken(Long userId, String username, String sessionId) {
-    var now = Instant.now();
-    var claims =
+    Instant now = Instant.now();
+    JwtClaimsSet claims =
         JwtClaimsSet.builder()
             .subject(username)
             .claim(CLAIM_USER_ID, userId)

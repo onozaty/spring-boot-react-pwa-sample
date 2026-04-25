@@ -1,10 +1,11 @@
 package com.github.onozaty.sample.controller;
 
+import com.github.onozaty.sample.domain.Session;
 import com.github.onozaty.sample.domain.User;
-import com.github.onozaty.sample.mapper.UserMapper;
 import com.github.onozaty.sample.service.AuthService;
 import com.github.onozaty.sample.service.InvalidRefreshTokenException;
 import com.github.onozaty.sample.service.JwtTokenService;
+import com.github.onozaty.sample.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,17 +35,17 @@ public class AuthController {
 
   private final AuthenticationManager authenticationManager;
   private final JwtTokenService jwtTokenService;
-  private final UserMapper userMapper;
+  private final UserService userService;
   private final AuthService authService;
 
   public AuthController(
       AuthenticationManager authenticationManager,
       JwtTokenService jwtTokenService,
-      UserMapper userMapper,
+      UserService userService,
       AuthService authService) {
     this.authenticationManager = authenticationManager;
     this.jwtTokenService = jwtTokenService;
-    this.userMapper = userMapper;
+    this.userService = userService;
     this.authService = authService;
   }
 
@@ -55,11 +57,11 @@ public class AuthController {
   })
   public ResponseEntity<User> login(@Valid @RequestBody LoginRequest request) {
     var authToken = new UsernamePasswordAuthenticationToken(request.email(), request.password());
-    var authentication = authenticationManager.authenticate(authToken);
+    Authentication authentication = authenticationManager.authenticate(authToken);
 
-    var email = authentication.getName();
-    var user =
-        userMapper
+    String email = authentication.getName();
+    User user =
+        userService
             .findByEmail(email)
             .orElseThrow(
                 () ->
@@ -108,15 +110,16 @@ public class AuthController {
 
     try {
       String sessionId = authService.validateAndRotateRefreshToken(plainRefreshToken);
-      var session =
+
+      Session session =
           authService
               .findSession(sessionId)
               .orElseThrow(
                   () ->
                       new AuthenticationCredentialsNotFoundException(
                           "Authenticated session not found"));
-      var user =
-          userMapper
+      User user =
+          userService
               .findById(session.getUserId())
               .orElseThrow(
                   () ->
@@ -152,12 +155,14 @@ public class AuthController {
   })
   public ResponseEntity<User> me(@AuthenticationPrincipal Jwt jwt) {
     Long userId = jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
-    var user =
-        userMapper
+
+    User user =
+        userService
             .findById(userId)
             .orElseThrow(
                 () ->
                     new AuthenticationCredentialsNotFoundException("Authenticated user not found"));
+
     return ResponseEntity.ok(user);
   }
 
@@ -171,7 +176,9 @@ public class AuthController {
       @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody PasswordChangeRequest request) {
     Long userId = jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
     String sessionId = jwt.getClaim(JwtTokenService.CLAIM_SESSION_ID);
+
     authService.changePassword(userId, sessionId, request.currentPassword(), request.newPassword());
+
     return ResponseEntity.noContent().build();
   }
 

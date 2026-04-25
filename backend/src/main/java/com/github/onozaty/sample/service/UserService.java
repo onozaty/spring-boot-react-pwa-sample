@@ -6,6 +6,7 @@ import com.github.onozaty.sample.domain.UserUpdateInput;
 import com.github.onozaty.sample.mapper.UserCredentialMapper;
 import com.github.onozaty.sample.mapper.UserMapper;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,28 +34,28 @@ public class UserService {
   }
 
   @Transactional(readOnly = true)
-  public User findById(Long id) {
-    return userMapper.findById(id).orElseThrow(() -> new UserNotFoundException(id));
+  public Optional<User> findById(Long id) {
+    return userMapper.findById(id);
+  }
+
+  @Transactional(readOnly = true)
+  public Optional<User> findByEmail(String email) {
+    return userMapper.findByEmail(email);
   }
 
   public User create(UserCreateInput input) {
     User created = userMapper.insert(input);
+
     credentialMapper.insert(created.getId(), passwordEncoder.encode(input.getPassword()));
+
     return created;
   }
 
-  public User update(Long id, UserUpdateInput input) {
-    User updated = userMapper.update(id, input);
-    if (updated == null) {
-      throw new UserNotFoundException(id);
-    }
-    return updated;
+  public Optional<User> update(Long id, UserUpdateInput input) {
+    return Optional.ofNullable(userMapper.update(id, input));
   }
 
-  public void delete(Long id) {
-    int deleted = userMapper.delete(id);
-    if (deleted == 0) {
-      throw new UserNotFoundException(id);
-    }
+  public boolean delete(Long id) {
+    return userMapper.delete(id) > 0;
   }
 }

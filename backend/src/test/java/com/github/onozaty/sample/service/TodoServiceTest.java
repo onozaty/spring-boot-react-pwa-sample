@@ -99,7 +99,7 @@ class TodoServiceTest {
     var updateInput = updateInput("更新後のテキスト", true);
 
     // Act
-    Todo updated = todoService.update(userId, created.getId(), updateInput);
+    Todo updated = todoService.update(userId, created.getId(), updateInput).orElseThrow();
 
     // Assert
     assertThat(updated.getId()).isEqualTo(created.getId());
@@ -111,8 +111,7 @@ class TodoServiceTest {
   @Test
   void testUpdateNotFound() {
     // Act & Assert
-    assertThatThrownBy(() -> todoService.update(userId, 999L, updateInput("テキスト", false)))
-        .isInstanceOf(TodoNotFoundException.class);
+    assertThat(todoService.update(userId, 999L, updateInput("テキスト", false))).isEmpty();
   }
 
   @Test
@@ -126,8 +125,7 @@ class TodoServiceTest {
     Todo other = todoService.create(otherUserId, createInput("他人のTODO"));
 
     // Act & Assert — 別ユーザーのTODOは更新できない
-    assertThatThrownBy(() -> todoService.update(userId, other.getId(), updateInput("改ざん", true)))
-        .isInstanceOf(TodoNotFoundException.class);
+    assertThat(todoService.update(userId, other.getId(), updateInput("改ざん", true))).isEmpty();
   }
 
   @Test
@@ -145,8 +143,7 @@ class TodoServiceTest {
   @Test
   void testDeleteNotFound() {
     // Act & Assert
-    assertThatThrownBy(() -> todoService.delete(userId, 999L))
-        .isInstanceOf(TodoNotFoundException.class);
+    assertThat(todoService.delete(userId, 999L)).isFalse();
   }
 
   @Test
@@ -160,8 +157,7 @@ class TodoServiceTest {
     Todo other = todoService.create(otherUserId, createInput("他人のTODO"));
 
     // Act & Assert — 別ユーザーのTODOは削除できない
-    assertThatThrownBy(() -> todoService.delete(userId, other.getId()))
-        .isInstanceOf(TodoNotFoundException.class);
+    assertThat(todoService.delete(userId, other.getId())).isFalse();
 
     // 他人のTODOは残っている
     assertThat(todoService.findAll(otherUserId)).hasSize(1);
