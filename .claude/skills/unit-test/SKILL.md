@@ -71,6 +71,35 @@ description: ユニットテストを Arrange/Act/Assert 構造で作成する�
 
 ---
 
+## プロジェクト固有のテスト規約（spring-boot-react-pwa-sample）
+
+### backend 統合テスト
+
+- テストクラスには `@AppTest` アノテーションを付与する。
+- テストは実際の PostgreSQL に接続して実行する。Mockito 等でデータ層をモックすることは禁止。
+- テスト間の DB 状態は `DatabaseResetExtension` によって各テスト前に自動リセットされる。テスト間の順序依存を作らないこと。
+
+```java
+@AppTest
+class UserServiceTest {
+
+  @Autowired private UserService userService;
+
+  @Test
+  void testFindByIdNotFound() {
+    // Act & Assert
+    assertThat(userService.findById(999L)).isEmpty();
+  }
+}
+```
+
+### frontend テスト
+
+- テストフレームワークは Vitest + Testing Library を使用する。
+- 外部 API は MSW でインターセプトし、実際のネットワークリクエストは発生させない。
+
+---
+
 ## 行動ルール
 
 - Arrange, Act, Assert の順序を必ず守る
