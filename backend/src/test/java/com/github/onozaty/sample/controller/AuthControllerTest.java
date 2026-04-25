@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
 @AppTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-class AuthControllerIntegrationTest {
+class AuthControllerTest {
 
   @LocalServerPort private int port;
 

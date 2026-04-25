@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @AppTest
-class UserServiceIntegrationTest {
+class UserServiceTest {
 
   @Autowired private UserService userService;
 

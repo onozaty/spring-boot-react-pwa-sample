@@ -20,7 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
 @AppTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-class UserControllerIntegrationTest {
+class UserControllerTest {
 
   private static final ParameterizedTypeReference<Map<String, Object>> PROBLEM_DETAIL_TYPE =
       new ParameterizedTypeReference<>() {};

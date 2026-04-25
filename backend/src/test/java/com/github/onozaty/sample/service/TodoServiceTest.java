@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @AppTest
-class TodoServiceIntegrationTest {
+class TodoServiceTest {
 
   @Autowired private TodoService todoService;
   @Autowired private UserService userService;

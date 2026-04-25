@@ -19,7 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
 
 @AppTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-class TodoControllerIntegrationTest {
+class TodoControllerTest {
 
   private static final ParameterizedTypeReference<Map<String, Object>> PROBLEM_DETAIL_TYPE =
       new ParameterizedTypeReference<>() {};
