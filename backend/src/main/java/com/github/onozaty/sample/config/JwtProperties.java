@@ -11,5 +11,5 @@ import org.springframework.validation.annotation.Validated;
 public record JwtProperties(
     // HS256 は 32 バイト以上の鍵を必要とする
     @NotBlank @Size(min = 32) String secret,
-    @Min(1) int expirationMinutes,
-    @Min(1) int refreshThresholdMinutes) {}
+    @Min(1) int accessExpirationMinutes,
+    @Min(1) int refreshExpirationDays) {}

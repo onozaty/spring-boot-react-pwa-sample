@@ -44,16 +44,28 @@ class AuthControllerIntegrationTest {
 
     var setCookieHeaders = response.getHeaders().get("Set-Cookie");
     assertThat(setCookieHeaders).isNotNull();
-    String authCookie =
+
+    String accessCookie =
         setCookieHeaders.stream()
-            .filter(v -> v.startsWith(JwtTokenService.COOKIE_NAME + "="))
+            .filter(v -> v.startsWith(JwtTokenService.ACCESS_TOKEN_COOKIE_NAME + "="))
             .findFirst()
             .orElse(null);
-    assertThat(authCookie).isNotNull();
-    assertThat(authCookie).contains("HttpOnly");
-    assertThat(authCookie).contains("SameSite=Strict");
-    assertThat(authCookie).contains("Path=/");
-    assertThat(authCookie).contains("Max-Age=");
+    assertThat(accessCookie).isNotNull();
+    assertThat(accessCookie).contains("HttpOnly");
+    assertThat(accessCookie).contains("SameSite=Strict");
+    assertThat(accessCookie).contains("Path=/");
+    assertThat(accessCookie).contains("Max-Age=");
+
+    String refreshCookie =
+        setCookieHeaders.stream()
+            .filter(v -> v.startsWith(JwtTokenService.REFRESH_TOKEN_COOKIE_NAME + "="))
+            .findFirst()
+            .orElse(null);
+    assertThat(refreshCookie).isNotNull();
+    assertThat(refreshCookie).contains("HttpOnly");
+    assertThat(refreshCookie).contains("SameSite=Strict");
+    assertThat(refreshCookie).contains("Path=/api/auth/refresh");
+    assertThat(refreshCookie).contains("Max-Age=");
   }
 
   @Test
@@ -91,14 +103,14 @@ class AuthControllerIntegrationTest {
   @Test
   void testLogout() {
     // Arrange
-    String cookie = login();
+    String accessCookie = loginAndGetAccessCookie();
 
     // Act
     ResponseEntity<Void> response =
         restClient
             .post()
             .uri("/api/auth/logout")
-            .header("Cookie", cookie)
+            .header("Cookie", accessCookie)
             .retrieve()
             .toBodilessEntity();
 
@@ -106,19 +118,125 @@ class AuthControllerIntegrationTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     var setCookieHeaders = response.getHeaders().get("Set-Cookie");
     assertThat(setCookieHeaders).isNotNull();
-    String authCookie =
+
+    String clearedAccessCookie =
         setCookieHeaders.stream()
-            .filter(v -> v.startsWith(JwtTokenService.COOKIE_NAME + "="))
+            .filter(v -> v.startsWith(JwtTokenService.ACCESS_TOKEN_COOKIE_NAME + "="))
             .findFirst()
             .orElse(null);
-    assertThat(authCookie).isNotNull();
-    assertThat(authCookie).contains("Max-Age=0");
+    assertThat(clearedAccessCookie).isNotNull();
+    assertThat(clearedAccessCookie).contains("Max-Age=0");
+
+    String clearedRefreshCookie =
+        setCookieHeaders.stream()
+            .filter(v -> v.startsWith(JwtTokenService.REFRESH_TOKEN_COOKIE_NAME + "="))
+            .findFirst()
+            .orElse(null);
+    assertThat(clearedRefreshCookie).isNotNull();
+    assertThat(clearedRefreshCookie).contains("Max-Age=0");
+  }
+
+  @Test
+  void testLogoutDoesNotAffectOtherSessions() {
+    // Arrange — 同じユーザーで 2 セッションを作成し、片方でログアウトする
+    String sessionACookie = loginAndGetAccessCookie();
+    String sessionBRefreshCookie = loginAndGetRefreshCookie();
+
+    // Act — セッション A だけログアウト
+    restClient
+        .post()
+        .uri("/api/auth/logout")
+        .header("Cookie", sessionACookie)
+        .retrieve()
+        .toBodilessEntity();
+
+    // Assert — セッション B の refresh は引き続き有効
+    ResponseEntity<Void> response =
+        restClient
+            .post()
+            .uri("/api/auth/refresh")
+            .header("Cookie", sessionBRefreshCookie)
+            .retrieve()
+            .toBodilessEntity();
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+  }
+
+  @Test
+  void testRefreshSuccess() {
+    // Arrange
+    var loginResponse =
+        restClient
+            .post()
+            .uri("/api/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("{\"email\":\"admin@example.com\",\"password\":\"admin\"}")
+            .retrieve()
+            .toBodilessEntity();
+
+    String refreshCookieHeader =
+        loginResponse.getHeaders().get("Set-Cookie").stream()
+            .filter(v -> v.startsWith(JwtTokenService.REFRESH_TOKEN_COOKIE_NAME + "="))
+            .map(v -> v.split(";")[0])
+            .findFirst()
+            .orElseThrow();
+
+    // Act
+    ResponseEntity<Void> response =
+        restClient
+            .post()
+            .uri("/api/auth/refresh")
+            .header("Cookie", refreshCookieHeader)
+            .retrieve()
+            .toBodilessEntity();
+
+    // Assert
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    var setCookieHeaders = response.getHeaders().get("Set-Cookie");
+    assertThat(setCookieHeaders).isNotNull();
+
+    assertThat(
+            setCookieHeaders.stream()
+                .anyMatch(v -> v.startsWith(JwtTokenService.ACCESS_TOKEN_COOKIE_NAME + "=")))
+        .isTrue();
+    assertThat(
+            setCookieHeaders.stream()
+                .anyMatch(v -> v.startsWith(JwtTokenService.REFRESH_TOKEN_COOKIE_NAME + "=")))
+        .isTrue();
+  }
+
+  @Test
+  void testRefreshWithInvalidToken() {
+    // Act & Assert
+    ResponseEntity<Void> response =
+        restClient
+            .post()
+            .uri("/api/auth/refresh")
+            .header("Cookie", JwtTokenService.REFRESH_TOKEN_COOKIE_NAME + "=invalid-token")
+            .retrieve()
+            .onStatus(status -> status.is4xxClientError(), (req, res) -> {})
+            .toBodilessEntity();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
+  void testRefreshWithoutCookie() {
+    // Act & Assert
+    ResponseEntity<Void> response =
+        restClient
+            .post()
+            .uri("/api/auth/refresh")
+            .retrieve()
+            .onStatus(status -> status.is4xxClientError(), (req, res) -> {})
+            .toBodilessEntity();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
   @Test
   void testGetMe() {
     // Arrange
-    String cookie = login();
+    String cookie = loginAndGetAccessCookie();
 
     // Act
     ResponseEntity<User> response =
@@ -150,8 +268,9 @@ class AuthControllerIntegrationTest {
 
   @Test
   void testChangePassword() {
-    // Arrange
-    String cookie = login();
+    // Arrange — 現在のセッション (current) と他端末セッション (other) を作成
+    String currentAccessCookie = loginAndGetAccessCookie();
+    String otherRefreshCookie = loginAndGetRefreshCookie();
 
     // Act
     ResponseEntity<Void> response =
@@ -159,7 +278,7 @@ class AuthControllerIntegrationTest {
             .patch()
             .uri("/api/auth/me/password")
             .contentType(MediaType.APPLICATION_JSON)
-            .header("Cookie", cookie)
+            .header("Cookie", currentAccessCookie)
             .body("{\"currentPassword\":\"admin\",\"newPassword\":\"newpassword123\"}")
             .retrieve()
             .toBodilessEntity();
@@ -177,12 +296,23 @@ class AuthControllerIntegrationTest {
             .retrieve()
             .toEntity(User.class);
     assertThat(loginResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+    // 他端末のセッション (refresh token) は失効している
+    ResponseEntity<Void> otherRefreshResponse =
+        restClient
+            .post()
+            .uri("/api/auth/refresh")
+            .header("Cookie", otherRefreshCookie)
+            .retrieve()
+            .onStatus(status -> status.is4xxClientError(), (req, res) -> {})
+            .toBodilessEntity();
+    assertThat(otherRefreshResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
   @Test
   void testChangePasswordWithWrongCurrentPassword() {
     // Arrange
-    String cookie = login();
+    String cookie = loginAndGetAccessCookie();
 
     // Act & Assert
     ResponseEntity<Void> response =
@@ -213,7 +343,15 @@ class AuthControllerIntegrationTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
-  private String login() {
+  private String loginAndGetAccessCookie() {
+    return loginAndGetCookie(JwtTokenService.ACCESS_TOKEN_COOKIE_NAME);
+  }
+
+  private String loginAndGetRefreshCookie() {
+    return loginAndGetCookie(JwtTokenService.REFRESH_TOKEN_COOKIE_NAME);
+  }
+
+  private String loginAndGetCookie(String cookieName) {
     var response =
         restClient
             .post()
@@ -224,7 +362,7 @@ class AuthControllerIntegrationTest {
             .toBodilessEntity();
 
     return response.getHeaders().get("Set-Cookie").stream()
-        .filter(v -> v.startsWith(JwtTokenService.COOKIE_NAME + "="))
+        .filter(v -> v.startsWith(cookieName + "="))
         .map(v -> v.split(";")[0])
         .findFirst()
         .orElseThrow();

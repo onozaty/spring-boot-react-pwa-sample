@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersIndexRouteImport } from './routes/users/index'
+import { Route as TodosIndexRouteImport } from './routes/todos/index'
 import { Route as UsersNewRouteImport } from './routes/users/new'
 import { Route as AccountPasswordRouteImport } from './routes/account/password'
 import { Route as UsersIdEditRouteImport } from './routes/users/$id.edit'
@@ -29,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
 const UsersIndexRoute = UsersIndexRouteImport.update({
   id: '/users/',
   path: '/users/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TodosIndexRoute = TodosIndexRouteImport.update({
+  id: '/todos/',
+  path: '/todos/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UsersNewRoute = UsersNewRouteImport.update({
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/account/password': typeof AccountPasswordRoute
   '/users/new': typeof UsersNewRoute
+  '/todos/': typeof TodosIndexRoute
   '/users/': typeof UsersIndexRoute
   '/users/$id/edit': typeof UsersIdEditRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/account/password': typeof AccountPasswordRoute
   '/users/new': typeof UsersNewRoute
+  '/todos': typeof TodosIndexRoute
   '/users': typeof UsersIndexRoute
   '/users/$id/edit': typeof UsersIdEditRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/account/password': typeof AccountPasswordRoute
   '/users/new': typeof UsersNewRoute
+  '/todos/': typeof TodosIndexRoute
   '/users/': typeof UsersIndexRoute
   '/users/$id/edit': typeof UsersIdEditRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/account/password'
     | '/users/new'
+    | '/todos/'
     | '/users/'
     | '/users/$id/edit'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/account/password'
     | '/users/new'
+    | '/todos'
     | '/users'
     | '/users/$id/edit'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/account/password'
     | '/users/new'
+    | '/todos/'
     | '/users/'
     | '/users/$id/edit'
   fileRoutesById: FileRoutesById
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   AccountPasswordRoute: typeof AccountPasswordRoute
   UsersNewRoute: typeof UsersNewRoute
+  TodosIndexRoute: typeof TodosIndexRoute
   UsersIndexRoute: typeof UsersIndexRoute
   UsersIdEditRoute: typeof UsersIdEditRoute
 }
@@ -129,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users/'
       preLoaderRoute: typeof UsersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/todos/': {
+      id: '/todos/'
+      path: '/todos'
+      fullPath: '/todos/'
+      preLoaderRoute: typeof TodosIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/users/new': {
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   AccountPasswordRoute: AccountPasswordRoute,
   UsersNewRoute: UsersNewRoute,
+  TodosIndexRoute: TodosIndexRoute,
   UsersIndexRoute: UsersIndexRoute,
   UsersIdEditRoute: UsersIdEditRoute,
 }

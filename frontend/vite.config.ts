@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import react from '@vitejs/plugin-react'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
@@ -9,6 +10,15 @@ export default defineConfig({
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,woff2,png,svg,webmanifest}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+      },
+    }),
   ],
   resolve: {
     alias: {

@@ -3,11 +3,14 @@ package com.github.onozaty.sample.controller;
 import com.github.onozaty.sample.domain.User;
 import com.github.onozaty.sample.mapper.UserMapper;
 import com.github.onozaty.sample.service.AuthService;
+import com.github.onozaty.sample.service.InvalidRefreshTokenException;
 import com.github.onozaty.sample.service.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -57,30 +60,88 @@ public class AuthController {
     var email = authentication.getName();
     var user =
         userMapper
-            .findByEmailWithCredential(email)
+            .findByEmail(email)
             .orElseThrow(
                 () ->
                     new AuthenticationCredentialsNotFoundException("Authenticated user not found"));
 
-    String token = jwtTokenService.issue(user.getId(), user.getEmail());
-
-    var responseUser = new User();
-    responseUser.setId(user.getId());
-    responseUser.setName(user.getName());
-    responseUser.setEmail(user.getEmail());
+    String sessionId = authService.createSession(user.getId());
+    String accessToken = jwtTokenService.issueAccessToken(user.getId(), user.getEmail(), sessionId);
+    String refreshToken = authService.issueRefreshToken(sessionId);
 
     return ResponseEntity.ok()
-        .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildAuthCookie(token).toString())
-        .body(responseUser);
+        .header(
+            HttpHeaders.SET_COOKIE, jwtTokenService.buildAccessTokenCookie(accessToken).toString())
+        .header(
+            HttpHeaders.SET_COOKIE,
+            jwtTokenService.buildRefreshTokenCookie(refreshToken).toString())
+        .body(user);
   }
 
   @PostMapping("/logout")
-  @Operation(summary = "ログアウト", description = "JWT Cookie を削除します")
+  @Operation(summary = "ログアウト", description = "現在の端末のセッションのみを破棄し、JWT Cookie を削除します")
   @ApiResponse(responseCode = "204", description = "ログアウト成功")
-  public ResponseEntity<Void> logout() {
+  public ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt jwt) {
+    String sessionId = jwt.getClaim(JwtTokenService.CLAIM_SESSION_ID);
+    authService.revokeSession(sessionId);
+
     return ResponseEntity.noContent()
-        .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAuthCookie().toString())
+        .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAccessTokenCookie().toString())
+        .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearRefreshTokenCookie().toString())
         .build();
+  }
+
+  @PostMapping("/refresh")
+  @Operation(summary = "トークンリフレッシュ", description = "リフレッシュトークンを使って新しいアクセストークンを発行します")
+  @ApiResponses({
+    @ApiResponse(responseCode = "204", description = "リフレッシュ成功"),
+    @ApiResponse(responseCode = "401", description = "リフレッシュトークンが無効または期限切れ")
+  })
+  public ResponseEntity<Void> refresh(HttpServletRequest request) {
+    String plainRefreshToken = extractRefreshTokenCookie(request);
+    if (plainRefreshToken == null) {
+      return ResponseEntity.status(401)
+          .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAccessTokenCookie().toString())
+          .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearRefreshTokenCookie().toString())
+          .build();
+    }
+
+    try {
+      String sessionId = authService.validateAndRotateRefreshToken(plainRefreshToken);
+      var session =
+          authService
+              .findSession(sessionId)
+              .orElseThrow(
+                  () ->
+                      new AuthenticationCredentialsNotFoundException(
+                          "Authenticated session not found"));
+      var user =
+          userMapper
+              .findById(session.getUserId())
+              .orElseThrow(
+                  () ->
+                      new AuthenticationCredentialsNotFoundException(
+                          "Authenticated user not found"));
+
+      String newAccessToken =
+          jwtTokenService.issueAccessToken(user.getId(), user.getEmail(), sessionId);
+      String newRefreshToken = authService.issueRefreshToken(sessionId);
+
+      return ResponseEntity.noContent()
+          .header(
+              HttpHeaders.SET_COOKIE,
+              jwtTokenService.buildAccessTokenCookie(newAccessToken).toString())
+          .header(
+              HttpHeaders.SET_COOKIE,
+              jwtTokenService.buildRefreshTokenCookie(newRefreshToken).toString())
+          .build();
+
+    } catch (InvalidRefreshTokenException e) {
+      return ResponseEntity.status(401)
+          .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAccessTokenCookie().toString())
+          .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearRefreshTokenCookie().toString())
+          .build();
+    }
   }
 
   @GetMapping("/me")
@@ -101,7 +162,7 @@ public class AuthController {
   }
 
   @PatchMapping("/me/password")
-  @Operation(summary = "パスワード変更", description = "ログイン中ユーザーのパスワードを変更します")
+  @Operation(summary = "パスワード変更", description = "ログイン中ユーザーのパスワードを変更します。他端末のセッションは失効します。")
   @ApiResponses({
     @ApiResponse(responseCode = "204", description = "変更成功"),
     @ApiResponse(responseCode = "400", description = "現在のパスワードが正しくない")
@@ -109,7 +170,20 @@ public class AuthController {
   public ResponseEntity<Void> changePassword(
       @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody PasswordChangeRequest request) {
     Long userId = jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
-    authService.changePassword(userId, request.currentPassword(), request.newPassword());
+    String sessionId = jwt.getClaim(JwtTokenService.CLAIM_SESSION_ID);
+    authService.changePassword(userId, sessionId, request.currentPassword(), request.newPassword());
     return ResponseEntity.noContent().build();
+  }
+
+  private String extractRefreshTokenCookie(HttpServletRequest request) {
+    if (request.getCookies() == null) {
+      return null;
+    }
+    for (Cookie cookie : request.getCookies()) {
+      if (JwtTokenService.REFRESH_TOKEN_COOKIE_NAME.equals(cookie.getName())) {
+        return cookie.getValue();
+      }
+    }
+    return null;
   }
 }

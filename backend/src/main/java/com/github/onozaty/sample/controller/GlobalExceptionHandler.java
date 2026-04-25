@@ -2,6 +2,7 @@ package com.github.onozaty.sample.controller;
 
 import com.github.onozaty.sample.service.InvalidCurrentPasswordException;
 import com.github.onozaty.sample.service.JwtTokenService;
+import com.github.onozaty.sample.service.TodoNotFoundException;
 import com.github.onozaty.sample.service.UserNotFoundException;
 import java.util.List;
 import org.slf4j.Logger;
@@ -37,6 +38,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return ResponseEntity.notFound().build();
   }
 
+  @ExceptionHandler(TodoNotFoundException.class)
+  public ResponseEntity<Void> handleTodoNotFound(TodoNotFoundException e) {
+    return ResponseEntity.notFound().build();
+  }
+
   @ExceptionHandler(InvalidCurrentPasswordException.class)
   public ResponseEntity<ProblemDetail> handleInvalidCurrentPassword(
       InvalidCurrentPasswordException e) {
@@ -54,7 +60,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     problemDetail.setTitle("Unauthorized");
     problemDetail.setDetail("認証情報が失効しています。再度ログインしてください。");
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-        .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAuthCookie().toString())
+        .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAccessTokenCookie().toString())
+        .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearRefreshTokenCookie().toString())
         .body(problemDetail);
   }
 

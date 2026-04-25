@@ -9,7 +9,7 @@ public class LoginHelper {
 
   private LoginHelper() {}
 
-  /** admin ユーザーでログインし、Set-Cookie ヘッダの値（Cookie ヘッダとして送れる形式）を返す。 例: "AUTH_TOKEN=eyJ..." */
+  /** admin ユーザーでログインし、Set-Cookie ヘッダの値（Cookie ヘッダとして送れる形式）を返す。 例: "ACCESS_TOKEN=eyJ..." */
   public static String getAuthCookie(String baseUrl) {
     var client = RestClient.builder().baseUrl(baseUrl).build();
     var response =
@@ -22,10 +22,10 @@ public class LoginHelper {
             .toBodilessEntity();
 
     return response.getHeaders().get("Set-Cookie").stream()
-        .filter(v -> v.startsWith(JwtTokenService.COOKIE_NAME + "="))
+        .filter(v -> v.startsWith(JwtTokenService.ACCESS_TOKEN_COOKIE_NAME + "="))
         .map(v -> v.split(";")[0])
         .findFirst()
         .orElseThrow(
-            () -> new IllegalStateException("AUTH_TOKEN cookie not found in login response"));
+            () -> new IllegalStateException("ACCESS_TOKEN cookie not found in login response"));
   }
 }

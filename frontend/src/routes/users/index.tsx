@@ -1,10 +1,18 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { OfflineUnavailable } from '@/components/offline-unavailable'
+import { useOnlineStatus } from '@/hooks/use-online-status'
 import { UserList } from '@/components/user-list'
 import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/users/')({
-  component: UsersPage,
+  component: UsersPageGuard,
 })
+
+function UsersPageGuard() {
+  const isOnline = useOnlineStatus()
+  if (!isOnline) return <OfflineUnavailable />
+  return <UsersPage />
+}
 
 function UsersPage() {
   return (

@@ -10,7 +10,6 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -22,8 +21,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class JwtTokenService {
 
-  public static final String COOKIE_NAME = "AUTH_TOKEN";
+  public static final String ACCESS_TOKEN_COOKIE_NAME = "ACCESS_TOKEN";
+  public static final String REFRESH_TOKEN_COOKIE_NAME = "REFRESH_TOKEN";
   public static final String CLAIM_USER_ID = "uid";
+  public static final String CLAIM_SESSION_ID = "sid";
+
+  private static final String REFRESH_TOKEN_COOKIE_PATH = "/api/auth/refresh";
 
   private final JwtEncoder encoder;
   private final JwtDecoder decoder;
@@ -41,56 +44,61 @@ public class JwtTokenService {
     this.decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
   }
 
-  public String issue(Long userId, String username) {
+  public String issueAccessToken(Long userId, String username, String sessionId) {
     var now = Instant.now();
     var claims =
         JwtClaimsSet.builder()
             .subject(username)
             .claim(CLAIM_USER_ID, userId)
+            .claim(CLAIM_SESSION_ID, sessionId)
             .issuedAt(now)
-            .expiresAt(now.plus(jwtProperties.expirationMinutes(), ChronoUnit.MINUTES))
+            .expiresAt(now.plus(jwtProperties.accessExpirationMinutes(), ChronoUnit.MINUTES))
             .build();
     return encoder
         .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
         .getTokenValue();
   }
 
-  public Jwt decode(String token) {
-    return decoder.decode(token);
-  }
-
   public JwtDecoder jwtDecoder() {
     return decoder;
   }
 
-  /** JWT の残り有効時間が refresh-threshold-minutes 未満かどうかを判定する */
-  public boolean needsRefresh(Jwt jwt) {
-    var exp = jwt.getExpiresAt();
-    if (exp == null) {
-      return false;
-    }
-    long remainingMinutes = ChronoUnit.MINUTES.between(Instant.now(), exp);
-    return remainingMinutes < jwtProperties.refreshThresholdMinutes();
-  }
-
-  /** 認証 Cookie を組み立てる */
-  public ResponseCookie buildAuthCookie(String token) {
-    return ResponseCookie.from(COOKIE_NAME, token)
+  public ResponseCookie buildAccessTokenCookie(String token) {
+    return ResponseCookie.from(ACCESS_TOKEN_COOKIE_NAME, token)
         .httpOnly(true)
         .secure(cookieProperties.secure())
         .sameSite("Strict")
         .path("/")
-        .maxAge(Duration.ofMinutes(jwtProperties.expirationMinutes()))
+        .maxAge(Duration.ofMinutes(jwtProperties.accessExpirationMinutes()))
         .build();
   }
 
-  /** ログアウト用（Cookie を即時失効させる）Cookie を組み立てる */
-  public ResponseCookie buildClearAuthCookie() {
-    return ResponseCookie.from(COOKIE_NAME, "")
+  public ResponseCookie buildClearAccessTokenCookie() {
+    return ResponseCookie.from(ACCESS_TOKEN_COOKIE_NAME, "")
         .httpOnly(true)
         .secure(cookieProperties.secure())
         .sameSite("Strict")
         .path("/")
+        .maxAge(0)
+        .build();
+  }
+
+  public ResponseCookie buildRefreshTokenCookie(String token) {
+    return ResponseCookie.from(REFRESH_TOKEN_COOKIE_NAME, token)
+        .httpOnly(true)
+        .secure(cookieProperties.secure())
+        .sameSite("Strict")
+        .path(REFRESH_TOKEN_COOKIE_PATH)
+        .maxAge(Duration.ofDays(jwtProperties.refreshExpirationDays()))
+        .build();
+  }
+
+  public ResponseCookie buildClearRefreshTokenCookie() {
+    return ResponseCookie.from(REFRESH_TOKEN_COOKIE_NAME, "")
+        .httpOnly(true)
+        .secure(cookieProperties.secure())
+        .sameSite("Strict")
+        .path(REFRESH_TOKEN_COOKIE_PATH)
         .maxAge(0)
         .build();
   }

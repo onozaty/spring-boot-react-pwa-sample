@@ -16,6 +16,8 @@ interface RouterContext {
 export const Route = createRootRouteWithContext<RouterContext>()({
   beforeLoad: async ({ location, context }) => {
     if (location.pathname.startsWith('/login')) return
+    // オフライン時は認証確認をスキップ（me API に到達できないため）
+    if (!navigator.onLine) return
     const user = await context.queryClient.ensureQueryData(meQueryOptions)
     if (user === null) throw redirect({ to: '/login' })
   },

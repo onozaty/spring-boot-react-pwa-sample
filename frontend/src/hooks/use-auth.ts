@@ -1,5 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { client } from '@/lib/api-client'
+import { resetDB } from '@/lib/db'
 import type { components } from '@/generated/api'
 
 type User = components['schemas']['User']
@@ -17,11 +18,17 @@ export const meQueryOptions = queryOptions<User | null>({
   retry: false,
 })
 
+// 別アカウントへのデータ混入を防ぐため、IndexedDB を破棄する。
+export async function clearLocalUserData(): Promise<void> {
+  await resetDB()
+}
+
 export function useAuth() {
   const { data: user, isLoading } = useQuery(meQueryOptions)
 
   const logout = async () => {
     await client.POST('/api/auth/logout')
+    await clearLocalUserData()
     window.location.href = '/login'
   }
 

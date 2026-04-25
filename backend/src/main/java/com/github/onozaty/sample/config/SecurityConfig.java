@@ -1,7 +1,6 @@
 package com.github.onozaty.sample.config;
 
 import com.github.onozaty.sample.security.CookieBearerTokenResolver;
-import com.github.onozaty.sample.security.JwtRefreshFilter;
 import com.github.onozaty.sample.service.JwtTokenService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -16,7 +15,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -25,15 +23,11 @@ public class SecurityConfig {
 
   private final JwtTokenService jwtTokenService;
   private final CookieBearerTokenResolver cookieBearerTokenResolver;
-  private final JwtRefreshFilter jwtRefreshFilter;
 
   public SecurityConfig(
-      JwtTokenService jwtTokenService,
-      CookieBearerTokenResolver cookieBearerTokenResolver,
-      JwtRefreshFilter jwtRefreshFilter) {
+      JwtTokenService jwtTokenService, CookieBearerTokenResolver cookieBearerTokenResolver) {
     this.jwtTokenService = jwtTokenService;
     this.cookieBearerTokenResolver = cookieBearerTokenResolver;
-    this.jwtRefreshFilter = jwtRefreshFilter;
   }
 
   @Bean
@@ -43,7 +37,7 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/api/auth/login")
+                auth.requestMatchers("/api/auth/login", "/api/auth/refresh")
                     .permitAll()
                     .requestMatchers("/api/**")
                     .authenticated()
@@ -65,8 +59,7 @@ public class SecurityConfig {
                       response.getWriter().write("{\"error\":\"Unauthorized\"}");
                     }))
         .formLogin(form -> form.disable())
-        .httpBasic(basic -> basic.disable())
-        .addFilterAfter(jwtRefreshFilter, BearerTokenAuthenticationFilter.class);
+        .httpBasic(basic -> basic.disable());
 
     return http.build();
   }

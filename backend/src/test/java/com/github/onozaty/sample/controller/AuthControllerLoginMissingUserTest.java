@@ -66,12 +66,21 @@ class AuthControllerLoginMissingUserTest {
 
     var setCookieHeaders = response.getHeaders().get("Set-Cookie");
     assertThat(setCookieHeaders).isNotNull();
-    String authCookie =
+
+    String accessCookie =
         setCookieHeaders.stream()
-            .filter(v -> v.startsWith(JwtTokenService.COOKIE_NAME + "="))
+            .filter(v -> v.startsWith(JwtTokenService.ACCESS_TOKEN_COOKIE_NAME + "="))
             .findFirst()
             .orElse(null);
-    assertThat(authCookie).isNotNull();
-    assertThat(authCookie).contains("Max-Age=0");
+    assertThat(accessCookie).isNotNull();
+    assertThat(accessCookie).contains("Max-Age=0");
+
+    String refreshCookie =
+        setCookieHeaders.stream()
+            .filter(v -> v.startsWith(JwtTokenService.REFRESH_TOKEN_COOKIE_NAME + "="))
+            .findFirst()
+            .orElse(null);
+    assertThat(refreshCookie).isNotNull();
+    assertThat(refreshCookie).contains("Max-Age=0");
   }
 }

@@ -15,7 +15,7 @@ public class CookieBearerTokenResolver implements BearerTokenResolver {
       return null;
     }
     for (Cookie cookie : request.getCookies()) {
-      if (JwtTokenService.COOKIE_NAME.equals(cookie.getName())) {
+      if (JwtTokenService.ACCESS_TOKEN_COOKIE_NAME.equals(cookie.getName())) {
         return cookie.getValue();
       }
     }

@@ -59,10 +59,9 @@ class UserE2ETest {
     page.getByLabel("メールアドレス").fill("admin@example.com");
     page.getByLabel("パスワード").fill("admin");
     page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("ログイン")).click();
-    // ログイン後 /users にリダイレクトされるまで待機
-    page.waitForURL("**/users");
-    // トップページに戻ってからテスト開始
-    page.navigate("http://localhost:" + port);
+    // ログイン後トップページに遷移するまで待機
+    assertThat(page.getByRole(AriaRole.HEADING, new Page.GetByRoleOptions().setName("ホーム")))
+        .isVisible();
   }
 
   @AfterEach

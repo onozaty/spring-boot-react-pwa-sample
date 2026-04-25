@@ -22,9 +22,11 @@ export function renderRoute(options: Options = {}) {
         retry: false,
         gcTime: Infinity,
         staleTime: Infinity,
+        networkMode: 'always',
       },
       mutations: {
         retry: false,
+        networkMode: 'always',
       },
     },
   })

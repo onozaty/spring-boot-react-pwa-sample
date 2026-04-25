@@ -1,16 +1,25 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
+import { OfflineUnavailable } from '@/components/offline-unavailable'
+import { useOnlineStatus } from '@/hooks/use-online-status'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { client } from '@/lib/api-client'
 
 export const Route = createFileRoute('/account/password')({
-  component: PasswordChangePage,
+  component: PasswordChangePageGuard,
 })
 
+function PasswordChangePageGuard() {
+  const isOnline = useOnlineStatus()
+  if (!isOnline) return <OfflineUnavailable />
+  return <PasswordChangePage />
+}
+
 function PasswordChangePage() {
+  const navigate = useNavigate()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -37,8 +46,7 @@ function PasswordChangePage() {
       }
 
       toast.success('パスワードを変更しました。')
-      setCurrentPassword('')
-      setNewPassword('')
+      navigate({ to: '/' })
     } catch {
       setError('パスワードの変更に失敗しました。')
     } finally {
@@ -48,12 +56,7 @@ function PasswordChangePage() {
 
   return (
     <div className="max-w-4xl mx-auto p-8">
-      <div className="flex items-center gap-4 mb-8">
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/users">← 戻る</Link>
-        </Button>
-        <h1 className="text-3xl font-bold">パスワード変更</h1>
-      </div>
+      <h1 className="text-3xl font-bold mb-8">パスワード変更</h1>
       <form onSubmit={handleSubmit} className="border rounded-lg p-6 space-y-4">
         <div className="space-y-2">
           <Label htmlFor="current-password">現在のパスワード</Label>
@@ -79,7 +82,15 @@ function PasswordChangePage() {
           />
         </div>
         {error && <p className="text-destructive text-sm">{error}</p>}
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate({ to: '/' })}
+            disabled={isPending}
+          >
+            キャンセル
+          </Button>
           <Button type="submit" disabled={isPending}>
             {isPending ? '変更中...' : '変更する'}
           </Button>

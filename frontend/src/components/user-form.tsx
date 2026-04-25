@@ -13,9 +13,10 @@ type ValidationProblemDetail = components['schemas']['ValidationProblemDetail']
 interface Props {
   editingUser: User | null
   onSuccess: () => void
+  onCancel: () => void
 }
 
-export function UserForm({ editingUser, onSuccess }: Props) {
+export function UserForm({ editingUser, onSuccess, onCancel }: Props) {
   const queryClient = useQueryClient()
   const [name, setName] = useState(editingUser?.name ?? '')
   const [email, setEmail] = useState(editingUser?.email ?? '')
@@ -121,7 +122,15 @@ export function UserForm({ editingUser, onSuccess }: Props) {
           )}
         </div>
       )}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={isPending}
+        >
+          キャンセル
+        </Button>
         <Button type="submit" disabled={isPending}>
           {editingUser ? '更新' : '作成'}
         </Button>

@@ -1,17 +1,25 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { $api } from '@/lib/api-client'
+import { OfflineUnavailable } from '@/components/offline-unavailable'
+import { useOnlineStatus } from '@/hooks/use-online-status'
 import { UserForm } from '@/components/user-form'
-import { Button } from '@/components/ui/button'
 
 export const Route = createFileRoute('/users/$id/edit')({
-  component: EditUserPage,
+  component: EditUserPageGuard,
 })
+
+function EditUserPageGuard() {
+  const isOnline = useOnlineStatus()
+  if (!isOnline) return <OfflineUnavailable />
+  return <EditUserPage />
+}
 
 function EditUserPage() {
   const { id } = Route.useParams()
   const navigate = useNavigate()
 
   const userId = Number(id)
+
   const {
     data: user,
     isPending,
@@ -34,18 +42,16 @@ function EditUserPage() {
       </div>
     )
 
+  const backToList = () => navigate({ to: '/users' })
+
   return (
     <div className="max-w-4xl mx-auto p-8">
-      <div className="flex items-center gap-4 mb-8">
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/users">← 戻る</Link>
-        </Button>
-        <h1 className="text-3xl font-bold">ユーザー編集</h1>
-      </div>
+      <h1 className="text-3xl font-bold mb-8">ユーザー編集</h1>
       <UserForm
         key={user.id}
         editingUser={user}
-        onSuccess={() => navigate({ to: '/users' })}
+        onSuccess={backToList}
+        onCancel={backToList}
       />
     </div>
   )

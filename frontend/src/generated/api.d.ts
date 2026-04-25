@@ -32,6 +32,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/todos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * TODO更新
+         * @description 指定したIDのTODOを更新します
+         */
+        put: operations["update_1"];
+        post?: never;
+        /**
+         * TODO削除
+         * @description 指定したIDのTODOを削除します
+         */
+        delete: operations["delete_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -50,6 +74,50 @@ export interface paths {
          * @description 新しいユーザーを登録します
          */
         post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/todos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * TODO一覧取得
+         * @description ログインユーザーのTODO一覧を取得します
+         */
+        get: operations["findAll_1"];
+        put?: never;
+        /**
+         * TODO作成
+         * @description 新しいTODOを作成します
+         */
+        post: operations["create_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * トークンリフレッシュ
+         * @description リフレッシュトークンを使って新しいアクセストークンを発行します
+         */
+        post: operations["refresh"];
         delete?: never;
         options?: never;
         head?: never;
@@ -221,6 +289,40 @@ export interface components {
              */
             updatedAt: string;
         };
+        /** @description TODO更新入力 */
+        TodoUpdateInput: {
+            /** @description テキスト */
+            text: string;
+            /** @description 完了フラグ */
+            done: boolean;
+        };
+        /** @description TODO */
+        Todo: {
+            /**
+             * Format: int64
+             * @description TODO ID
+             */
+            id: number;
+            /**
+             * Format: int64
+             * @description ユーザーID
+             */
+            userId: number;
+            /** @description テキスト */
+            text: string;
+            /** @description 完了フラグ */
+            done: boolean;
+            /**
+             * Format: date-time
+             * @description 作成日時
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description 更新日時
+             */
+            updatedAt: string;
+        };
         /** @description ユーザー作成入力 */
         UserCreateInput: {
             /**
@@ -236,6 +338,11 @@ export interface components {
             email: string;
             /** @description パスワード（8文字以上） */
             password: string;
+        };
+        /** @description TODO作成入力 */
+        TodoCreateInput: {
+            /** @description テキスト */
+            text: string;
         };
         /** @description ログインリクエスト */
         LoginRequest: {
@@ -378,6 +485,79 @@ export interface operations {
             };
         };
     };
+    update_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description TODO ID */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TodoUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description 更新成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Todo"];
+                };
+            };
+            /** @description バリデーションエラー */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ValidationProblemDetail"];
+                };
+            };
+            /** @description TODOが存在しない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Todo"];
+                };
+            };
+        };
+    };
+    delete_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description TODO ID */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 削除成功 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description TODOが存在しない */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     findAll: {
         parameters: {
             query?: never;
@@ -437,6 +617,84 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["User"];
                 };
+            };
+        };
+    };
+    findAll_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 取得成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Todo"][];
+                };
+            };
+        };
+    };
+    create_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TodoCreateInput"];
+            };
+        };
+        responses: {
+            /** @description 作成成功 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Todo"];
+                };
+            };
+            /** @description バリデーションエラー */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ValidationProblemDetail"];
+                };
+            };
+        };
+    };
+    refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description リフレッシュ成功 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description リフレッシュトークンが無効または期限切れ */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -511,7 +769,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description 現在のパスワードが不正 */
+            /** @description 現在のパスワードが正しくない */
             400: {
                 headers: {
                     [name: string]: unknown;

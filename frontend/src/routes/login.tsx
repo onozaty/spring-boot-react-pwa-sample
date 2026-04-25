@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { meQueryOptions } from '@/hooks/use-auth'
+import { clearLocalUserData, meQueryOptions } from '@/hooks/use-auth'
 import { client } from '@/lib/api-client'
 
 export const Route = createFileRoute('/login')({
@@ -35,8 +35,10 @@ function LoginPage() {
         return
       }
 
+      // 前ユーザーのローカルデータが残っているケースに備えてクリアしてから遷移する。
+      await clearLocalUserData()
       queryClient.setQueryData(meQueryOptions.queryKey, data ?? null)
-      navigate({ to: '/users' })
+      navigate({ to: '/' })
     } catch {
       setError('ログインに失敗しました。')
     } finally {

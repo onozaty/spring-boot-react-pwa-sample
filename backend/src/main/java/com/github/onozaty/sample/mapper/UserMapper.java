@@ -58,6 +58,14 @@ public interface UserMapper {
 
   @Select(
       """
+      SELECT id, name, email
+      FROM users
+      WHERE email = #{email}
+      """)
+  Optional<User> findByEmail(String email);
+
+  @Select(
+      """
       SELECT u.id, u.name, u.email, c.password_hash
       FROM users u
       INNER JOIN user_credentials c ON u.id = c.user_id
