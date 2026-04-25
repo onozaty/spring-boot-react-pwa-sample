@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 public class User {
 
   @Schema(description = "ユーザーID", requiredMode = Schema.RequiredMode.REQUIRED)
-  private Long id;
+  private long id;
 
   @Schema(description = "名前", requiredMode = Schema.RequiredMode.REQUIRED, example = "山田太郎")
   private String name;
@@ -24,11 +24,11 @@ public class User {
   @Schema(description = "更新日時", requiredMode = Schema.RequiredMode.REQUIRED)
   private OffsetDateTime updatedAt;
 
-  public Long getId() {
+  public long getId() {
     return id;
   }
 
-  public void setId(Long id) {
+  public void setId(long id) {
     this.id = id;
   }
 

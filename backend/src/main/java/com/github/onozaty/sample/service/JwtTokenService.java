@@ -44,7 +44,7 @@ public class JwtTokenService {
     this.decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
   }
 
-  public String issueAccessToken(Long userId, String username, String sessionId) {
+  public String issueAccessToken(long userId, String username, String sessionId) {
     Instant now = Instant.now();
     JwtClaimsSet claims =
         JwtClaimsSet.builder()

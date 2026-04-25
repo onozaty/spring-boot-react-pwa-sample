@@ -1,10 +1,11 @@
 package com.github.onozaty.sample.controller;
 
-import com.github.onozaty.sample.domain.Session;
 import com.github.onozaty.sample.domain.User;
+import com.github.onozaty.sample.security.UserPrincipal;
 import com.github.onozaty.sample.service.AuthService;
-import com.github.onozaty.sample.service.InvalidRefreshTokenException;
 import com.github.onozaty.sample.service.JwtTokenService;
+import com.github.onozaty.sample.service.LoginResult;
+import com.github.onozaty.sample.service.RefreshResult;
 import com.github.onozaty.sample.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -16,11 +17,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,17 +30,12 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Auth", description = "認証API")
 public class AuthController {
 
-  private final AuthenticationManager authenticationManager;
   private final JwtTokenService jwtTokenService;
   private final UserService userService;
   private final AuthService authService;
 
   public AuthController(
-      AuthenticationManager authenticationManager,
-      JwtTokenService jwtTokenService,
-      UserService userService,
-      AuthService authService) {
-    this.authenticationManager = authenticationManager;
+      JwtTokenService jwtTokenService, UserService userService, AuthService authService) {
     this.jwtTokenService = jwtTokenService;
     this.userService = userService;
     this.authService = authService;
@@ -56,36 +48,23 @@ public class AuthController {
     @ApiResponse(responseCode = "401", description = "認証失敗")
   })
   public ResponseEntity<User> login(@Valid @RequestBody LoginRequest request) {
-    var authToken = new UsernamePasswordAuthenticationToken(request.email(), request.password());
-    Authentication authentication = authenticationManager.authenticate(authToken);
-
-    String email = authentication.getName();
-    User user =
-        userService
-            .findByEmail(email)
-            .orElseThrow(
-                () ->
-                    new AuthenticationCredentialsNotFoundException("Authenticated user not found"));
-
-    String sessionId = authService.createSession(user.getId());
-    String accessToken = jwtTokenService.issueAccessToken(user.getId(), user.getEmail(), sessionId);
-    String refreshToken = authService.issueRefreshToken(sessionId);
+    LoginResult result = authService.login(request.email(), request.password());
 
     return ResponseEntity.ok()
         .header(
-            HttpHeaders.SET_COOKIE, jwtTokenService.buildAccessTokenCookie(accessToken).toString())
+            HttpHeaders.SET_COOKIE,
+            jwtTokenService.buildAccessTokenCookie(result.accessToken()).toString())
         .header(
             HttpHeaders.SET_COOKIE,
-            jwtTokenService.buildRefreshTokenCookie(refreshToken).toString())
-        .body(user);
+            jwtTokenService.buildRefreshTokenCookie(result.refreshToken()).toString())
+        .body(result.user());
   }
 
   @PostMapping("/logout")
   @Operation(summary = "ログアウト", description = "現在の端末のセッションのみを破棄し、JWT Cookie を削除します")
   @ApiResponse(responseCode = "204", description = "ログアウト成功")
-  public ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt jwt) {
-    String sessionId = jwt.getClaim(JwtTokenService.CLAIM_SESSION_ID);
-    authService.revokeSession(sessionId);
+  public ResponseEntity<Void> logout(@AuthenticationPrincipal UserPrincipal principal) {
+    authService.revokeSession(principal.sessionId());
 
     return ResponseEntity.noContent()
         .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAccessTokenCookie().toString())
@@ -108,43 +87,22 @@ public class AuthController {
           .build();
     }
 
-    try {
-      String sessionId = authService.validateAndRotateRefreshToken(plainRefreshToken);
-
-      Session session =
-          authService
-              .findSession(sessionId)
-              .orElseThrow(
-                  () ->
-                      new AuthenticationCredentialsNotFoundException(
-                          "Authenticated session not found"));
-      User user =
-          userService
-              .findById(session.getUserId())
-              .orElseThrow(
-                  () ->
-                      new AuthenticationCredentialsNotFoundException(
-                          "Authenticated user not found"));
-
-      String newAccessToken =
-          jwtTokenService.issueAccessToken(user.getId(), user.getEmail(), sessionId);
-      String newRefreshToken = authService.issueRefreshToken(sessionId);
-
-      return ResponseEntity.noContent()
-          .header(
-              HttpHeaders.SET_COOKIE,
-              jwtTokenService.buildAccessTokenCookie(newAccessToken).toString())
-          .header(
-              HttpHeaders.SET_COOKIE,
-              jwtTokenService.buildRefreshTokenCookie(newRefreshToken).toString())
-          .build();
-
-    } catch (InvalidRefreshTokenException e) {
+    RefreshResult result = authService.refresh(plainRefreshToken).orElse(null);
+    if (result == null) {
       return ResponseEntity.status(401)
           .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearAccessTokenCookie().toString())
           .header(HttpHeaders.SET_COOKIE, jwtTokenService.buildClearRefreshTokenCookie().toString())
           .build();
     }
+
+    return ResponseEntity.noContent()
+        .header(
+            HttpHeaders.SET_COOKIE,
+            jwtTokenService.buildAccessTokenCookie(result.accessToken()).toString())
+        .header(
+            HttpHeaders.SET_COOKIE,
+            jwtTokenService.buildRefreshTokenCookie(result.refreshToken()).toString())
+        .build();
   }
 
   @GetMapping("/me")
@@ -153,12 +111,10 @@ public class AuthController {
     @ApiResponse(responseCode = "200", description = "取得成功"),
     @ApiResponse(responseCode = "401", description = "未認証")
   })
-  public ResponseEntity<User> me(@AuthenticationPrincipal Jwt jwt) {
-    Long userId = jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
-
+  public ResponseEntity<User> me(@AuthenticationPrincipal UserPrincipal principal) {
     User user =
         userService
-            .findById(userId)
+            .findById(principal.userId())
             .orElseThrow(
                 () ->
                     new AuthenticationCredentialsNotFoundException("Authenticated user not found"));
@@ -173,11 +129,13 @@ public class AuthController {
     @ApiResponse(responseCode = "400", description = "現在のパスワードが正しくない")
   })
   public ResponseEntity<Void> changePassword(
-      @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody PasswordChangeRequest request) {
-    Long userId = jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
-    String sessionId = jwt.getClaim(JwtTokenService.CLAIM_SESSION_ID);
-
-    authService.changePassword(userId, sessionId, request.currentPassword(), request.newPassword());
+      @AuthenticationPrincipal UserPrincipal principal,
+      @Valid @RequestBody PasswordChangeRequest request) {
+    authService.changePassword(
+        principal.userId(),
+        principal.sessionId(),
+        request.currentPassword(),
+        request.newPassword());
 
     return ResponseEntity.noContent().build();
   }

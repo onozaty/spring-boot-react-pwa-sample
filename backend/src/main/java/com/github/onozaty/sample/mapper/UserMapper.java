@@ -28,7 +28,7 @@ public interface UserMapper {
       FROM users
       WHERE id = #{id}
       """)
-  Optional<User> findById(Long id);
+  Optional<User> findById(long id);
 
   @Select(
       """
@@ -47,14 +47,14 @@ public interface UserMapper {
       WHERE id = #{id}
       RETURNING *
       """)
-  User update(@Param("id") Long id, @Param("input") UserUpdateInput input);
+  User update(@Param("id") long id, @Param("input") UserUpdateInput input);
 
   @Delete(
       """
       DELETE FROM users
       WHERE id = #{id}
       """)
-  int delete(Long id);
+  int delete(long id);
 
   @Select(
       """

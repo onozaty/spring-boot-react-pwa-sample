@@ -34,7 +34,7 @@ public class UserService {
   }
 
   @Transactional(readOnly = true)
-  public Optional<User> findById(Long id) {
+  public Optional<User> findById(long id) {
     return userMapper.findById(id);
   }
 
@@ -51,11 +51,11 @@ public class UserService {
     return created;
   }
 
-  public Optional<User> update(Long id, UserUpdateInput input) {
+  public Optional<User> update(long id, UserUpdateInput input) {
     return Optional.ofNullable(userMapper.update(id, input));
   }
 
-  public boolean delete(Long id) {
+  public boolean delete(long id) {
     return userMapper.delete(id) > 0;
   }
 }

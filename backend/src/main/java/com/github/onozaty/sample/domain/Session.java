@@ -5,7 +5,7 @@ import java.time.OffsetDateTime;
 public class Session {
 
   private String id;
-  private Long userId;
+  private long userId;
   private OffsetDateTime createdAt;
   private OffsetDateTime lastUsedAt;
 
@@ -17,11 +17,11 @@ public class Session {
     this.id = id;
   }
 
-  public Long getUserId() {
+  public long getUserId() {
     return userId;
   }
 
-  public void setUserId(Long userId) {
+  public void setUserId(long userId) {
     this.userId = userId;
   }
 

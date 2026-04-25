@@ -20,7 +20,7 @@ public interface TodoMapper {
       WHERE user_id = #{userId}
       ORDER BY created_at
       """)
-  List<Todo> findAllByUserId(Long userId);
+  List<Todo> findAllByUserId(long userId);
 
   @Select(
       """
@@ -29,7 +29,7 @@ public interface TodoMapper {
       WHERE id = #{id}
         AND user_id = #{userId}
       """)
-  Optional<Todo> findByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
+  Optional<Todo> findByIdAndUserId(@Param("id") long id, @Param("userId") long userId);
 
   @Select(
       """
@@ -37,7 +37,7 @@ public interface TodoMapper {
       VALUES (#{userId}, #{input.text}, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *
       """)
-  Todo insert(@Param("userId") Long userId, @Param("input") TodoCreateInput input);
+  Todo insert(@Param("userId") long userId, @Param("input") TodoCreateInput input);
 
   @Select(
       """
@@ -50,7 +50,7 @@ public interface TodoMapper {
       RETURNING *
       """)
   Todo update(
-      @Param("id") Long id, @Param("userId") Long userId, @Param("input") TodoUpdateInput input);
+      @Param("id") long id, @Param("userId") long userId, @Param("input") TodoUpdateInput input);
 
   @Delete(
       """
@@ -58,5 +58,5 @@ public interface TodoMapper {
       WHERE id = #{id}
         AND user_id = #{userId}
       """)
-  int delete(@Param("id") Long id, @Param("userId") Long userId);
+  int delete(@Param("id") long id, @Param("userId") long userId);
 }

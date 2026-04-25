@@ -17,7 +17,7 @@ public interface SessionMapper {
       INSERT INTO sessions (id, user_id, created_at, last_used_at)
       VALUES (#{id}, #{userId}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       """)
-  void insert(@Param("id") String id, @Param("userId") Long userId);
+  void insert(@Param("id") String id, @Param("userId") long userId);
 
   @Select(
       """
@@ -48,7 +48,7 @@ public interface SessionMapper {
       WHERE user_id = #{userId}
         AND id <> #{exceptId}
       """)
-  int deleteByUserIdExcept(@Param("userId") Long userId, @Param("exceptId") String exceptId);
+  int deleteByUserIdExcept(@Param("userId") long userId, @Param("exceptId") String exceptId);
 
   // 有効な refresh_token を 1 件も持たない session を削除する。
   // refresh_tokens は session_id への FK 制約 (ON DELETE CASCADE) を持つため、

@@ -1,13 +1,18 @@
 package com.github.onozaty.sample.config;
 
 import com.github.onozaty.sample.security.CookieBearerTokenResolver;
+import com.github.onozaty.sample.security.UserPrincipal;
 import com.github.onozaty.sample.service.JwtTokenService;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.Collections;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -15,6 +20,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -48,7 +54,10 @@ public class SecurityConfig {
         .oauth2ResourceServer(
             oauth2 ->
                 oauth2
-                    .jwt(jwt -> jwt.decoder(jwtTokenService.jwtDecoder()))
+                    .jwt(
+                        jwt ->
+                            jwt.decoder(jwtTokenService.jwtDecoder())
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter()))
                     .bearerTokenResolver(cookieBearerTokenResolver))
         .exceptionHandling(
             ex ->
@@ -62,6 +71,17 @@ public class SecurityConfig {
         .httpBasic(basic -> basic.disable());
 
     return http.build();
+  }
+
+  @Bean
+  Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
+    return jwt -> {
+      long userId = (Long) jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
+      String email = jwt.getSubject();
+      String sessionId = jwt.getClaim(JwtTokenService.CLAIM_SESSION_ID);
+      UserPrincipal principal = new UserPrincipal(userId, email, sessionId);
+      return new UsernamePasswordAuthenticationToken(principal, jwt, Collections.emptyList());
+    };
   }
 
   @Bean

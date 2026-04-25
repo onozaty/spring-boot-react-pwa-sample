@@ -20,19 +20,19 @@ public class TodoService {
   }
 
   @Transactional(readOnly = true)
-  public List<Todo> findAll(Long userId) {
+  public List<Todo> findAll(long userId) {
     return todoMapper.findAllByUserId(userId);
   }
 
-  public Todo create(Long userId, TodoCreateInput input) {
+  public Todo create(long userId, TodoCreateInput input) {
     return todoMapper.insert(userId, input);
   }
 
-  public Optional<Todo> update(Long userId, Long todoId, TodoUpdateInput input) {
+  public Optional<Todo> update(long userId, long todoId, TodoUpdateInput input) {
     return Optional.ofNullable(todoMapper.update(todoId, userId, input));
   }
 
-  public boolean delete(Long userId, Long todoId) {
+  public boolean delete(long userId, long todoId) {
     return todoMapper.delete(todoId, userId) > 0;
   }
 }

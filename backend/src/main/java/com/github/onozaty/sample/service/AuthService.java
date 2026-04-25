@@ -3,6 +3,7 @@ package com.github.onozaty.sample.service;
 import com.github.onozaty.sample.config.JwtProperties;
 import com.github.onozaty.sample.domain.RefreshToken;
 import com.github.onozaty.sample.domain.Session;
+import com.github.onozaty.sample.domain.User;
 import com.github.onozaty.sample.mapper.RefreshTokenMapper;
 import com.github.onozaty.sample.mapper.SessionMapper;
 import com.github.onozaty.sample.mapper.UserCredentialMapper;
@@ -14,6 +15,9 @@ import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,22 +31,80 @@ public class AuthService {
   private final RefreshTokenMapper refreshTokenMapper;
   private final PasswordEncoder passwordEncoder;
   private final JwtProperties jwtProperties;
+  private final AuthenticationManager authenticationManager;
+  private final JwtTokenService jwtTokenService;
+  private final UserService userService;
 
   public AuthService(
       UserCredentialMapper credentialMapper,
       SessionMapper sessionMapper,
       RefreshTokenMapper refreshTokenMapper,
       PasswordEncoder passwordEncoder,
-      JwtProperties jwtProperties) {
+      JwtProperties jwtProperties,
+      AuthenticationManager authenticationManager,
+      JwtTokenService jwtTokenService,
+      UserService userService) {
     this.credentialMapper = credentialMapper;
     this.sessionMapper = sessionMapper;
     this.refreshTokenMapper = refreshTokenMapper;
     this.passwordEncoder = passwordEncoder;
     this.jwtProperties = jwtProperties;
+    this.authenticationManager = authenticationManager;
+    this.jwtTokenService = jwtTokenService;
+    this.userService = userService;
+  }
+
+  public LoginResult login(String email, String password) {
+    Authentication authentication =
+        authenticationManager.authenticate(
+            new UsernamePasswordAuthenticationToken(email, password));
+
+    String authenticatedEmail = authentication.getName();
+    User user =
+        userService
+            .findByEmail(authenticatedEmail)
+            .orElseThrow(
+                () ->
+                    new AuthenticationCredentialsNotFoundException("Authenticated user not found"));
+
+    String sessionId = createSession(user.getId());
+    String accessToken = jwtTokenService.issueAccessToken(user.getId(), user.getEmail(), sessionId);
+    String refreshToken = issueRefreshToken(sessionId);
+
+    return new LoginResult(user, accessToken, refreshToken);
+  }
+
+  public Optional<RefreshResult> refresh(String plainRefreshToken) {
+    String sessionId;
+    try {
+      sessionId = validateAndRotateRefreshToken(plainRefreshToken);
+    } catch (InvalidRefreshTokenException e) {
+      return Optional.empty();
+    }
+
+    Session session =
+        sessionMapper
+            .findById(sessionId)
+            .orElseThrow(
+                () ->
+                    new AuthenticationCredentialsNotFoundException(
+                        "Authenticated session not found"));
+    User user =
+        userService
+            .findById(session.getUserId())
+            .orElseThrow(
+                () ->
+                    new AuthenticationCredentialsNotFoundException("Authenticated user not found"));
+
+    String newAccessToken =
+        jwtTokenService.issueAccessToken(user.getId(), user.getEmail(), sessionId);
+    String newRefreshToken = issueRefreshToken(sessionId);
+
+    return Optional.of(new RefreshResult(newAccessToken, newRefreshToken));
   }
 
   public void changePassword(
-      Long userId, String currentSessionId, String currentPassword, String newPassword) {
+      long userId, String currentSessionId, String currentPassword, String newPassword) {
     String currentHash =
         credentialMapper
             .findPasswordHashByUserId(userId)
@@ -64,7 +126,7 @@ public class AuthService {
     return sessionMapper.findById(sessionId);
   }
 
-  public String createSession(Long userId) {
+  public String createSession(long userId) {
     String sessionId = UUID.randomUUID().toString();
     sessionMapper.insert(sessionId, userId);
     return sessionId;

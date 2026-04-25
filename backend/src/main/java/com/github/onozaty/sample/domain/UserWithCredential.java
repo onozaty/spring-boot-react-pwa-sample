@@ -3,16 +3,16 @@ package com.github.onozaty.sample.domain;
 /** UserDetailsService 内部でのみ使用する認証情報付きユーザー DTO */
 public class UserWithCredential {
 
-  private Long id;
+  private long id;
   private String name;
   private String email;
   private String passwordHash;
 
-  public Long getId() {
+  public long getId() {
     return id;
   }
 
-  public void setId(Long id) {
+  public void setId(long id) {
     this.id = id;
   }
 

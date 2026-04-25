@@ -15,7 +15,7 @@ public interface UserCredentialMapper {
       INSERT INTO user_credentials (user_id, password_hash, created_at, updated_at)
       VALUES (#{userId}, #{passwordHash}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       """)
-  void insert(@Param("userId") Long userId, @Param("passwordHash") String passwordHash);
+  void insert(@Param("userId") long userId, @Param("passwordHash") String passwordHash);
 
   @Update(
       """
@@ -24,7 +24,7 @@ public interface UserCredentialMapper {
           updated_at = CURRENT_TIMESTAMP
       WHERE user_id = #{userId}
       """)
-  int updatePassword(@Param("userId") Long userId, @Param("passwordHash") String passwordHash);
+  int updatePassword(@Param("userId") long userId, @Param("passwordHash") String passwordHash);
 
   @Select(
       """
@@ -32,5 +32,5 @@ public interface UserCredentialMapper {
       FROM user_credentials
       WHERE user_id = #{userId}
       """)
-  Optional<String> findPasswordHashByUserId(Long userId);
+  Optional<String> findPasswordHashByUserId(long userId);
 }

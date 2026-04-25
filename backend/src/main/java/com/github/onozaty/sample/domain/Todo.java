@@ -7,10 +7,10 @@ import java.time.OffsetDateTime;
 public class Todo {
 
   @Schema(description = "TODO ID", requiredMode = Schema.RequiredMode.REQUIRED)
-  private Long id;
+  private long id;
 
   @Schema(description = "ユーザーID", requiredMode = Schema.RequiredMode.REQUIRED)
-  private Long userId;
+  private long userId;
 
   @Schema(description = "テキスト", requiredMode = Schema.RequiredMode.REQUIRED)
   private String text;
@@ -24,19 +24,19 @@ public class Todo {
   @Schema(description = "更新日時", requiredMode = Schema.RequiredMode.REQUIRED)
   private OffsetDateTime updatedAt;
 
-  public Long getId() {
+  public long getId() {
     return id;
   }
 
-  public void setId(Long id) {
+  public void setId(long id) {
     this.id = id;
   }
 
-  public Long getUserId() {
+  public long getUserId() {
     return userId;
   }
 
-  public void setUserId(Long userId) {
+  public void setUserId(long userId) {
     this.userId = userId;
   }
 
