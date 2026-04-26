@@ -52,14 +52,17 @@ export function useReachability(): boolean {
     () => true,
   )
 
+  // useQuery を polling として使う:
+  // - refetchInterval で 30 秒ごとに checkReachable を実行
+  // - enabled=false (browserOnline=false) のときは polling 停止
+  // - refetchIntervalInBackground=false で非アクティブタブでは polling しない
+  // - retry=false で失敗を即 false に反映 (周期も乱さない)
   const { data: healthOk = true } = useQuery({
     queryKey: reachabilityQueryKey,
     queryFn: checkReachable,
     enabled: browserOnline,
     refetchInterval: HEALTH_CHECK_INTERVAL_MS,
     refetchIntervalInBackground: false,
-    staleTime: 0,
-    gcTime: 0,
     retry: false,
   })
 

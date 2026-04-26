@@ -19,6 +19,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     if (location.pathname.startsWith('/login')) return
     // オフライン時は認証確認をスキップ（me API に到達できないため）
     if (!navigator.onLine) return
+    // ensureQueryData: キャッシュにあれば即返し、なければ fetch して待つ。
+    // 同じ queryKey を `useQuery(meQueryOptions)` でも使うため、ここで取った結果が
+    // コンポーネント側で再フェッチされずに再利用される。
     const user = await context.queryClient.ensureQueryData(meQueryOptions)
     if (user === null) throw redirect({ to: '/login' })
   },

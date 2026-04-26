@@ -37,6 +37,8 @@ function LoginPage() {
 
       // 前ユーザーのローカルデータが残っているケースに備えてクリアしてから遷移する。
       await clearLocalUserData()
+      // ログイン応答をそのままキャッシュへ書き込む。これがないと遷移先の
+      // useQuery(meQueryOptions) が /api/auth/me を即再フェッチしてしまう。
       queryClient.setQueryData(meQueryOptions.queryKey, data ?? null)
       navigate({ to: '/' })
     } catch {

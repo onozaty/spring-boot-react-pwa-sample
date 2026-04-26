@@ -10,9 +10,9 @@ import './index.css'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,
-      gcTime: 1000 * 60 * 10,
       retry: 1,
+      // フォーカス復帰での自動 refetch を抑止。
+      // 到達可否は useReachability の polling + invalidateQueries で別途扱う。
       refetchOnWindowFocus: false,
       // networkMode: 'always' = オフラインでも query/mutation を実行させる。
       // TODO 機能は IndexedDB をソースに動くため、navigator.onLine が false でも

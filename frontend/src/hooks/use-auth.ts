@@ -6,7 +6,9 @@ import type { components } from '@/generated/api'
 type User = components['schemas']['User']
 
 // 401 は「エラー」ではなく「未ログイン」として扱いたいので、
-// $api.useQuery ではなく client.GET を直接呼んで null に変換する
+// $api.useQuery ではなく client.GET を直接呼んで null に変換する。
+// queryOptions で括ることで、__root.tsx の `ensureQueryData(meQueryOptions)` と
+// コンポーネントの `useQuery(meQueryOptions)` で同じ queryKey/queryFn を共有できる。
 export const meQueryOptions = queryOptions<User | null>({
   queryKey: ['auth', 'me'],
   queryFn: async () => {
@@ -14,7 +16,6 @@ export const meQueryOptions = queryOptions<User | null>({
     if (response.status === 401) return null
     return data ?? null
   },
-  staleTime: 1000 * 60 * 5,
   retry: false,
 })
 

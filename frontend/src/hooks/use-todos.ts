@@ -73,7 +73,6 @@ export function useTodos() {
     // reachable はクロージャ経由で参照。false→true 遷移時の再 fetch は
     // useReachability 側で invalidateQueries(todosQueryKey) を呼ぶことで起こす。
     queryFn: () => fetchAndSyncTodos(reachable),
-    staleTime: 1000 * 30,
   })
 }
 
