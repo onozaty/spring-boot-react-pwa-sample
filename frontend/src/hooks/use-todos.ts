@@ -105,6 +105,7 @@ export function useTodoMutations() {
         userId: 0,
         text,
         done: false,
+        // 仮値。再送成功時に serverToLocal 経由で DB の値に上書きされる。
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending',
       })
@@ -147,6 +148,7 @@ export function useTodoMutations() {
       await upsertTodo({
         ...todo,
         done,
+        // 仮値。再送成功時に serverToLocal 経由で DB の値に上書きされる。
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending',
       })
