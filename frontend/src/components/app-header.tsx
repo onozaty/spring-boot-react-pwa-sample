@@ -1,11 +1,11 @@
 import { Link } from '@tanstack/react-router'
 import { useAuth } from '@/hooks/use-auth'
-import { useOnlineStatus } from '@/hooks/use-online-status'
+import { useReachability } from '@/hooks/use-reachability'
 import { Button } from '@/components/ui/button'
 
 export function AppHeader() {
   const { user, logout } = useAuth()
-  const isOnline = useOnlineStatus()
+  const isReachable = useReachability()
 
   return (
     <header className="border-b px-8 py-3 flex items-center justify-between">
@@ -15,7 +15,7 @@ export function AppHeader() {
       {user && (
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">{user.name}</span>
-          {isOnline && (
+          {isReachable && (
             <Button variant="ghost" size="sm" asChild>
               <Link to="/account/password">パスワード変更</Link>
             </Button>
@@ -24,7 +24,7 @@ export function AppHeader() {
             variant="outline"
             size="sm"
             onClick={() => logout()}
-            disabled={!isOnline}
+            disabled={!isReachable}
           >
             ログアウト
           </Button>

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { OfflineUnavailable } from '@/components/offline-unavailable'
-import { useOnlineStatus } from '@/hooks/use-online-status'
+import { useReachability } from '@/hooks/use-reachability'
 import { UserList } from '@/components/user-list'
 import { Button } from '@/components/ui/button'
 
@@ -9,8 +9,8 @@ export const Route = createFileRoute('/users/')({
 })
 
 function UsersPageGuard() {
-  const isOnline = useOnlineStatus()
-  if (!isOnline) return <OfflineUnavailable />
+  const isReachable = useReachability()
+  if (!isReachable) return <OfflineUnavailable />
   return <UsersPage />
 }
 

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { OfflineUnavailable } from '@/components/offline-unavailable'
-import { useOnlineStatus } from '@/hooks/use-online-status'
+import { useReachability } from '@/hooks/use-reachability'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,8 +13,8 @@ export const Route = createFileRoute('/account/password')({
 })
 
 function PasswordChangePageGuard() {
-  const isOnline = useOnlineStatus()
-  if (!isOnline) return <OfflineUnavailable />
+  const isReachable = useReachability()
+  if (!isReachable) return <OfflineUnavailable />
   return <PasswordChangePage />
 }
 

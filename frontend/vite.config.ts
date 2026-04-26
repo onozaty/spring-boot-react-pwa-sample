@@ -14,6 +14,9 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
+      // 新しい SW を install したら自動アクティブ化 + ページリロード。
+      // 古い precache と新しいページコードのハッシュ不整合を防ぐため。
+      registerType: 'autoUpdate',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,woff2,png,svg,webmanifest}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,

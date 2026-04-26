@@ -81,8 +81,9 @@ class TodoControllerTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     var todos = response.getBody();
     assertThat(todos).hasSize(2);
-    assertThat(todos[0].getText()).isEqualTo("TODO 1");
-    assertThat(todos[1].getText()).isEqualTo("TODO 2");
+    // ID 降順で返るため後から作成した「TODO 2」が先頭
+    assertThat(todos[0].getText()).isEqualTo("TODO 2");
+    assertThat(todos[1].getText()).isEqualTo("TODO 1");
   }
 
   @Test

@@ -1,16 +1,16 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useOnlineStatus } from '@/hooks/use-online-status'
+import { useReachability } from '@/hooks/use-reachability'
 
 export const Route = createFileRoute('/')({
   component: TopPage,
 })
 
 function TopPage() {
-  const isOnline = useOnlineStatus()
+  const isReachable = useReachability()
   return (
     <div className="max-w-4xl mx-auto p-8">
       <h1 className="text-3xl font-bold mb-8">ホーム</h1>
-      {!isOnline && (
+      {!isReachable && (
         <div className="mb-4 rounded-md bg-yellow-50 border border-yellow-300 px-4 py-2 text-sm text-yellow-800">
           オフラインモードです。一部機能は利用できません。
         </div>
@@ -24,7 +24,7 @@ function TopPage() {
             TODO
           </Link>
         </li>
-        {isOnline && (
+        {isReachable && (
           <li>
             <Link
               to="/users"

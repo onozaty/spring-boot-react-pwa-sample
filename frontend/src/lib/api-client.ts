@@ -17,6 +17,8 @@ async function tryRefresh(): Promise<boolean> {
   isRefreshing = true
   refreshPromise = (async () => {
     try {
+      // client の onResponse ミドルウェア内から呼ばれるため、client 経由だと
+      // 401 時に再び tryRefresh が走り再帰してしまう。ここは生の fetch を使う。
       const res = await globalThis.fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'same-origin',
@@ -59,5 +61,11 @@ client.use({
   },
 })
 
+// 通常はこちらを使う。React Query との統合 (useQuery / useMutation / queryOptions) を提供する。
+// 例: const { data } = $api.useQuery('get', '/api/users')
 export const $api = createQueryClient(client)
+
+// 以下のような React Query の枠を外れるケースのみ client を直接使う:
+// - フック外の async 関数から呼ぶ (例: processSyncQueue は online イベントから直呼び)
+// - response.ok / status を直接見て分岐したい (例: 401 を未ログイン扱いに、login 結果のステータス判定)
 export { client }

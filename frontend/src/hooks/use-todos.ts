@@ -2,90 +2,105 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { client } from '@/lib/api-client'
 import type { components } from '@/generated/api'
 import {
+  createTodoOnServer,
+  deleteTodoOnServer,
+  HttpError,
+  serverToLocal,
+  updateTodoOnServer,
+} from '@/lib/sync-queue'
+import {
   deleteTodo,
-  dequeueSyncOp,
   enqueueSyncOp,
   getPendingSyncOps,
-  getTodoByServerId,
   getTodos,
   removeSyncOpsByLocalId,
+  todosQueryKey,
   upsertTodo,
+  type TodoRecord,
 } from '@/lib/todo-store'
-import type { TodoRecord } from '@/lib/db'
+import { useReachability } from './use-reachability'
 
-type ServerTodo = components['schemas']['Todo']
+export { todosQueryKey, HttpError }
 
-export const todosQueryKey = ['todos'] as const
+// useTodos の queryFn。サーバーとの同期と IDB 読み出しを兼ねる。
+// reachable=false ならネットワークアクセスをせず IDB をそのまま返す。
+async function fetchAndSyncTodos(reachable: boolean): Promise<TodoRecord[]> {
+  // オフライン中は API を叩かない (reachable=false なら確実に失敗するため)
+  if (!reachable) return getTodos()
 
-function serverToLocal(todo: ServerTodo): TodoRecord {
-  return {
-    localId: `server-${todo.id}`,
-    serverId: todo.id,
-    userId: todo.userId,
-    text: todo.text,
-    done: todo.done,
-    updatedAt: todo.updatedAt,
-    syncStatus: 'synced',
-  }
-}
-
-async function fetchAndSyncTodos(): Promise<TodoRecord[]> {
-  // 同期待ちの操作がある間はサーバー状態で IDB を上書きしない
-  // （オフライン削除中のTODOが SW キャッシュから復活するのを防ぐ）
+  // 未送信の変更が残っているうちはサーバー応答で IDB を上書きしない。
+  // 例: オフラインで削除した TODO がキューに積まれた状態で、
+  //     サーバーから「まだ存在する」レスポンスを受けると IDB に復活してしまう。
+  //     → キュー消化 (processSyncQueue) が完了するまでサーバー反映を保留する。
   const pendingOps = await getPendingSyncOps()
   if (pendingOps.length > 0) {
     return getTodos()
   }
 
+  // queryFn では通信失敗・HTTP エラーいずれも吸収して IDB の内容を返したい
+  // (PWA はサーバー障害でも動くべき)。
+  let data: components['schemas']['Todo'][] | undefined
   try {
-    const { data } = await client.GET('/api/todos')
-    if (data) {
-      const serverIds = new Set(data.map((t) => t.id))
-      for (const todo of data) {
-        await upsertTodo(serverToLocal(todo))
-      }
-      // サーバーに無くなった（他端末で削除された）TODO を IDB からも削除
-      const local = await getTodos()
-      for (const t of local) {
-        if (t.serverId && !serverIds.has(t.serverId)) {
-          await deleteTodo(t.localId)
-        }
+    const res = await client.GET('/api/todos')
+    data = res.data
+  } catch {
+    // 通信失敗時は IDB を返すだけ
+  }
+
+  if (data) {
+    // サーバーの全 TODO を IDB に反映 (upsert)。
+    // serverToLocal の localId が一意なので、既存レコードの上書きになる。
+    const serverIds = new Set(data.map((t) => t.id))
+    for (const todo of data) {
+      await upsertTodo(serverToLocal(todo))
+    }
+    // 他端末で削除された TODO は、ローカルにだけ残っているので消す。
+    // 未同期のローカル TODO (serverId === null) は対象外なので安全。
+    const local = await getTodos()
+    for (const t of local) {
+      if (t.serverId && !serverIds.has(t.serverId)) {
+        await deleteTodo(t.localId)
       }
     }
-  } catch {
-    // オフラインまたはエラー時はIndexedDBのデータを返す
   }
   return getTodos()
 }
 
 export function useTodos() {
+  const reachable = useReachability()
   return useQuery({
     queryKey: todosQueryKey,
-    queryFn: fetchAndSyncTodos,
+    // reachable はクロージャ経由で参照。false→true 遷移時の再 fetch は
+    // useReachability 側で invalidateQueries(todosQueryKey) を呼ぶことで起こす。
+    queryFn: () => fetchAndSyncTodos(reachable),
     staleTime: 1000 * 30,
   })
 }
 
 export function useTodoMutations() {
   const queryClient = useQueryClient()
+  const reachable = useReachability()
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: todosQueryKey })
+  // ミューテーション後は IDB から直接読み取って即時に React Query キャッシュへ反映する。
+  // invalidateQueries だとサーバー往復の re-fetch が走って UI 反映に 0.5 秒程度のラグが出るため。
+  const refreshFromIdb = async () => {
+    const fresh = await getTodos()
+    queryClient.setQueryData<TodoRecord[]>(todosQueryKey, fresh)
+  }
 
   const createTodo = useMutation({
+    // reachable=true: API で作成 → IDB に反映。失敗 (ネットワーク or HTTP) は onError へ。
+    // reachable=false: API は叩かず仮 localId でローカル保存 + 'create' をキューに積む。
+    //   processSyncQueue が後で再送し、採番された TODO に置き換える。
     mutationFn: async (text: string) => {
-      try {
-        const { data } = await client.POST('/api/todos', { body: { text } })
-        if (data) {
-          await upsertTodo(serverToLocal(data))
-          return
-        }
-      } catch {
-        // フォールバックへ
+      if (reachable) {
+        const created = await createTodoOnServer(text)
+        await upsertTodo(serverToLocal(created))
+        return
       }
-      // オフライン or API失敗時: IndexedDBに書き込み + キューイング
       const localId = crypto.randomUUID()
-      const record: TodoRecord = {
+      // userId は IDB ではユニーク制約に使わないので 0 のダミーで足りる。
+      await upsertTodo({
         localId,
         serverId: null,
         userId: 0,
@@ -93,11 +108,10 @@ export function useTodoMutations() {
         done: false,
         updatedAt: new Date().toISOString(),
         syncStatus: 'pending',
-      }
-      await upsertTodo(record)
-      await enqueueSyncOp('create', localId, { text })
+      })
+      await enqueueSyncOp({ type: 'create', localId, payload: { text } })
     },
-    onSuccess: invalidate,
+    onSuccess: refreshFromIdb,
   })
 
   const toggleTodo = useMutation({
@@ -112,22 +126,25 @@ export function useTodoMutations() {
       const todo = todos.find((t) => t.localId === localId)
       if (!todo) return
 
-      if (todo.serverId) {
-        try {
-          const { data } = await client.PUT('/api/todos/{id}', {
-            params: { path: { id: todo.serverId } },
-            body: { text: todo.text, done },
-          })
-          if (data) {
-            await upsertTodo(serverToLocal(data))
-            return
-          }
-        } catch {
-          // フォールバックへ
-        }
-        await enqueueSyncOp('update', localId, { text: todo.text, done })
+      // サーバー上にある TODO で reachable なら API で更新して終わり。
+      if (todo.serverId && reachable) {
+        const updated = await updateTodoOnServer(todo.serverId, {
+          text: todo.text,
+          done,
+        })
+        await upsertTodo(serverToLocal(updated))
+        return
       }
-      // ローカルに楽観的更新
+
+      // サーバー TODO だがオフライン: 'update' をキューに積む。
+      // 未同期の新規 TODO (serverId===null) の場合は 'create' キューが既にあるのでローカル更新だけ。
+      if (todo.serverId) {
+        await enqueueSyncOp({
+          type: 'update',
+          localId,
+          payload: { serverId: todo.serverId, text: todo.text, done },
+        })
+      }
       await upsertTodo({
         ...todo,
         done,
@@ -135,82 +152,37 @@ export function useTodoMutations() {
         syncStatus: 'pending',
       })
     },
-    onSuccess: invalidate,
+    onSuccess: refreshFromIdb,
   })
 
   const deleteTodoMutation = useMutation({
     mutationFn: async (localId: string) => {
       const todos = await getTodos()
       const todo = todos.find((t) => t.localId === localId)
-      if (!todo) {
-        return
-      }
+      if (!todo) return
 
       if (todo.serverId) {
-        // サーバーに存在する: DELETE APIを叩く（失敗時はキューに積む）
-        try {
-          await client.DELETE('/api/todos/{id}', {
-            params: { path: { id: todo.serverId } },
+        if (reachable) {
+          // サーバー上の TODO: API で削除。失敗 (ネットワーク or HTTP) は onError へ。
+          await deleteTodoOnServer(todo.serverId)
+        } else {
+          // オフライン: 'delete' をキューに積む。
+          await enqueueSyncOp({
+            type: 'delete',
+            localId,
+            payload: { serverId: todo.serverId },
           })
-        } catch {
-          await enqueueSyncOp('delete', localId, { serverId: todo.serverId })
         }
       } else {
-        // サーバーに未同期のローカルTODO: create 操作を取り消す
+        // 未同期のローカル TODO を削除するケース:
+        // サーバーには存在しないので削除 API は不要。むしろキューに積まれている
+        // 'create' を打ち消さないと、後でゾンビ TODO がサーバーに作られてしまう。
         await removeSyncOpsByLocalId(localId)
       }
       await deleteTodo(localId)
     },
-    onSuccess: invalidate,
+    onSuccess: refreshFromIdb,
   })
 
   return { createTodo, toggleTodo, deleteTodo: deleteTodoMutation }
-}
-
-export async function processSyncQueue(): Promise<void> {
-  const ops = await getPendingSyncOps()
-  for (const op of ops) {
-    try {
-      if (op.type === 'create') {
-        const { data } = await client.POST('/api/todos', {
-          body: { text: op.payload.text as string },
-        })
-        if (data) {
-          await upsertTodo(serverToLocal(data))
-          const localTodo = await getTodos().then((ts) =>
-            ts.find((t) => t.localId === op.localId),
-          )
-          if (localTodo) {
-            await deleteTodo(op.localId)
-          }
-        }
-      } else if (op.type === 'update') {
-        const todo = await getTodoByServerId(op.payload.serverId as number)
-        const existing =
-          todo ??
-          (await getTodos().then((ts) =>
-            ts.find((t) => t.localId === op.localId),
-          ))
-        if (existing?.serverId) {
-          const { data } = await client.PUT('/api/todos/{id}', {
-            params: { path: { id: existing.serverId } },
-            body: {
-              text: op.payload.text as string,
-              done: op.payload.done as boolean,
-            },
-          })
-          if (data) {
-            await upsertTodo({ ...serverToLocal(data) })
-          }
-        }
-      } else if (op.type === 'delete') {
-        await client.DELETE('/api/todos/{id}', {
-          params: { path: { id: op.payload.serverId as number } },
-        })
-      }
-      await dequeueSyncOp(op.id)
-    } catch {
-      // 個別失敗はスキップして次へ
-    }
-  }
 }

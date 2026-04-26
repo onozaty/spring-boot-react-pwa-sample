@@ -49,6 +49,10 @@ export const mockAuthUser: User = {
 }
 
 export const handlers = [
+  http.get('*/api/health', () => {
+    return new HttpResponse(null, { status: 204 })
+  }),
+
   http.get('*/api/auth/me', () => {
     return HttpResponse.json(mockAuthUser)
   }),

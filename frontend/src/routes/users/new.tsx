@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { OfflineUnavailable } from '@/components/offline-unavailable'
-import { useOnlineStatus } from '@/hooks/use-online-status'
+import { useReachability } from '@/hooks/use-reachability'
 import { UserForm } from '@/components/user-form'
 
 export const Route = createFileRoute('/users/new')({
@@ -8,8 +8,8 @@ export const Route = createFileRoute('/users/new')({
 })
 
 function NewUserPageGuard() {
-  const isOnline = useOnlineStatus()
-  if (!isOnline) return <OfflineUnavailable />
+  const isReachable = useReachability()
+  if (!isReachable) return <OfflineUnavailable />
   return <NewUserPage />
 }
 

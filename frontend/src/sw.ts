@@ -13,10 +13,9 @@ declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>
 }
 
-interface SyncEvent extends ExtendableEvent {
-  readonly tag: string
-}
-
+// 新 SW を即座にアクティブ化 + 既存タブを controller 配下に取り込む。
+// vite-plugin-pwa の registerType: 'autoUpdate' と組み合わさって、
+// install 完了後すぐに新 SW が controller になり、register 側で page.reload() される。
 self.addEventListener('install', () => {
   self.skipWaiting()
 })
@@ -55,93 +54,3 @@ registerRoute(
     ],
   }),
 )
-
-// Background Sync: オンライン復帰時にキューを処理
-self.addEventListener('sync', (event) => {
-  const syncEvent = event as SyncEvent
-  if (syncEvent.tag === 'todo-sync') {
-    syncEvent.waitUntil(runSyncQueue())
-  }
-})
-
-const syncChannel = new BroadcastChannel('todo-sync')
-
-async function runSyncQueue(): Promise<void> {
-  const {
-    getPendingSyncOps,
-    dequeueSyncOp,
-    upsertTodo,
-    deleteTodo,
-    getTodoByServerId,
-    getTodos,
-  } = await import('./lib/todo-store')
-
-  const ops = await getPendingSyncOps()
-  if (ops.length === 0) return
-
-  for (const op of ops) {
-    try {
-      if (op.type === 'create') {
-        const res = await fetch('/api/todos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ text: op.payload.text }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          await upsertTodo({
-            localId: `server-${data.id}`,
-            serverId: data.id,
-            userId: data.userId,
-            text: data.text,
-            done: data.done,
-            updatedAt: data.updatedAt,
-            syncStatus: 'synced',
-          })
-          const todos = await getTodos()
-          const localTodo = todos.find((t) => t.localId === op.localId)
-          if (localTodo) await deleteTodo(op.localId)
-        }
-      } else if (op.type === 'update') {
-        const todo = await getTodoByServerId(op.payload.serverId as number)
-        const todos = await getTodos()
-        const existing = todo ?? todos.find((t) => t.localId === op.localId)
-        if (existing?.serverId) {
-          const res = await fetch(`/api/todos/${existing.serverId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({
-              text: op.payload.text,
-              done: op.payload.done,
-            }),
-          })
-          if (res.ok) {
-            const data = await res.json()
-            await upsertTodo({
-              localId: `server-${data.id}`,
-              serverId: data.id,
-              userId: data.userId,
-              text: data.text,
-              done: data.done,
-              updatedAt: data.updatedAt,
-              syncStatus: 'synced',
-            })
-          }
-        }
-      } else if (op.type === 'delete') {
-        await fetch(`/api/todos/${op.payload.serverId}`, {
-          method: 'DELETE',
-          credentials: 'same-origin',
-        })
-      }
-      await dequeueSyncOp(op.id)
-    } catch {
-      // 個別失敗はスキップ
-    }
-  }
-
-  syncChannel.postMessage({ type: 'TODOS_UPDATED' })
-  syncChannel.postMessage({ type: 'SYNC_COMPLETED' })
-}

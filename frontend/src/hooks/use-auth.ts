@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { client } from '@/lib/api-client'
-import { resetDB } from '@/lib/db'
+import { resetDB } from '@/lib/todo-store'
 import type { components } from '@/generated/api'
 
 type User = components['schemas']['User']

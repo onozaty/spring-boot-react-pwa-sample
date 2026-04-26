@@ -18,7 +18,7 @@ public interface TodoMapper {
       SELECT *
       FROM todos
       WHERE user_id = #{userId}
-      ORDER BY created_at
+      ORDER BY id DESC
       """)
   List<Todo> findAllByUserId(long userId);
 

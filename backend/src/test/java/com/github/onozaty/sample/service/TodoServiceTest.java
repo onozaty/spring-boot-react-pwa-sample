@@ -67,9 +67,9 @@ class TodoServiceTest {
     // Act
     var todos = todoService.findAll(userId);
 
-    // Assert
+    // Assert — id 降順なので後から作成したものが先頭
     assertThat(todos).hasSize(3);
-    assertThat(todos).extracting(Todo::getText).containsExactly("TODO 1", "TODO 2", "TODO 3");
+    assertThat(todos).extracting(Todo::getText).containsExactly("TODO 3", "TODO 2", "TODO 1");
   }
 
   @Test

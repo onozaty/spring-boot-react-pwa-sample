@@ -38,10 +38,10 @@ describe('TodoList', () => {
       expect(screen.getByText('牛乳を買う')).toBeInTheDocument(),
     )
 
-    // Assert — mockTodos[0]: done=false, mockTodos[1]: done=true
+    // Assert — id 降順なので [0]=id2「メールを返信する」(done=true)、[1]=id1「牛乳を買う」(done=false)
     const checkboxes = screen.getAllByRole('checkbox')
-    expect(checkboxes[0]).not.toBeChecked()
-    expect(checkboxes[1]).toBeChecked()
+    expect(checkboxes[0]).toBeChecked()
+    expect(checkboxes[1]).not.toBeChecked()
   })
 
   it('TODO が空のとき「TODOがありません」が表示される', async () => {
@@ -129,13 +129,13 @@ describe('TodoList', () => {
       expect(screen.getByText('牛乳を買う')).toBeInTheDocument(),
     )
 
-    // Act — 未完了の「牛乳を買う」（checkboxes[0]）を完了にする
+    // Act — 未完了の「牛乳を買う」（id 降順なので checkboxes[1]）を完了にする
     const checkboxes = screen.getAllByRole('checkbox')
-    await user.click(checkboxes[0])
+    await user.click(checkboxes[1])
 
     // Assert
     await waitFor(() => {
-      expect(screen.getAllByRole('checkbox')[0]).toBeChecked()
+      expect(screen.getAllByRole('checkbox')[1]).toBeChecked()
     })
   })
 
@@ -157,9 +157,9 @@ describe('TodoList', () => {
       expect(screen.getByText('牛乳を買う')).toBeInTheDocument(),
     )
 
-    // Act — 「牛乳を買う」の削除ボタンをクリック
+    // Act — 「牛乳を買う」の削除ボタンをクリック (id 降順なので [1])
     const deleteButtons = screen.getAllByRole('button', { name: '削除' })
-    await user.click(deleteButtons[0])
+    await user.click(deleteButtons[1])
 
     // Assert
     await waitFor(() => {

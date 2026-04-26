@@ -125,7 +125,11 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     const { enqueueSyncOp, getPendingSyncOps } = await getStore()
 
     // Act
-    await enqueueSyncOp('create', 'local-1', { text: 'テスト' })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 'テスト' },
+    })
     const ops = await getPendingSyncOps()
 
     // Assert
@@ -144,11 +148,23 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
       new Promise((resolve) => setTimeout(resolve, ms))
 
     // Act
-    await enqueueSyncOp('create', 'local-1', {})
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 't1' },
+    })
     await wait(2)
-    await enqueueSyncOp('update', 'local-2', {})
+    await enqueueSyncOp({
+      type: 'update',
+      localId: 'local-2',
+      payload: { serverId: 2, text: 't2', done: false },
+    })
     await wait(2)
-    await enqueueSyncOp('delete', 'local-3', {})
+    await enqueueSyncOp({
+      type: 'delete',
+      localId: 'local-3',
+      payload: { serverId: 3 },
+    })
     const ops = await getPendingSyncOps()
 
     // Assert
@@ -163,9 +179,17 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     const { enqueueSyncOp, getPendingSyncOps, dequeueSyncOp } = await getStore()
     const wait = (ms: number) =>
       new Promise((resolve) => setTimeout(resolve, ms))
-    await enqueueSyncOp('create', 'local-1', {})
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 't1' },
+    })
     await wait(2)
-    await enqueueSyncOp('update', 'local-2', {})
+    await enqueueSyncOp({
+      type: 'update',
+      localId: 'local-2',
+      payload: { serverId: 2, text: 't2', done: false },
+    })
     const [first] = await getPendingSyncOps()
 
     // Act
@@ -185,9 +209,21 @@ describe('removeSyncOpsByLocalId', () => {
       await getStore()
 
     // Act
-    await enqueueSyncOp('create', 'local-1', {})
-    await enqueueSyncOp('update', 'local-1', {})
-    await enqueueSyncOp('create', 'local-2', {})
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 't1' },
+    })
+    await enqueueSyncOp({
+      type: 'update',
+      localId: 'local-1',
+      payload: { serverId: 1, text: 't1u', done: true },
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-2',
+      payload: { text: 't2' },
+    })
     await removeSyncOpsByLocalId('local-1')
     const ops = await getPendingSyncOps()
 

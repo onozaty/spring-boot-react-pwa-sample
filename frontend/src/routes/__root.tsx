@@ -7,6 +7,7 @@ import {
 import { Toaster } from 'sonner'
 import { AppHeader } from '@/components/app-header'
 import { meQueryOptions } from '@/hooks/use-auth'
+import { useReachabilityEffects } from '@/hooks/use-reachability'
 import type { QueryClient } from '@tanstack/react-query'
 
 interface RouterContext {
@@ -25,6 +26,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 })
 
 function RootLayout() {
+  // アプリ全体で 1 度だけ呼ぶ。
+  // - ヘルスチェックの起動 (useReachability 経由で内部購読)
+  // - false→true 遷移時の processSyncQueue 呼び出し
+  // ここ以外で呼ぶと processSyncQueue が多重起動して op が複数回送信される。
+  useReachabilityEffects()
+
   const isLogin = useRouterState({
     select: (s) => s.location.pathname.startsWith('/login'),
   })

@@ -164,6 +164,36 @@ class TodoE2ETest {
     assertThat(page.getByText("残すTODO")).isVisible();
   }
 
+  @Test
+  void testOfflineCreateThenSyncOnReconnectNoDuplicates() {
+    // Arrange — オフラインで TODO を3件追加し、オンライン復帰後に重複登録されないことを確認する。
+    // useReachabilityEffects を __root.tsx でのみ呼ぶ仕様の回帰テスト。複数箇所で呼ばれて
+    // processSyncQueue が多重起動すると、各 op が複数回送信されてサーバーに重複が作られる。
+
+    // オフライン化 (setUp 完了時点で reachable=true 状態)
+    page.context().setOffline(true);
+    // ヘルスチェックが失敗して reachable=false (オフラインバナー表示) になるまで待つ
+    assertThat(page.getByText("オフラインモードです").first()).isVisible();
+
+    // Act 1: オフラインで3件追加
+    addTodo("オフラインTODO 1");
+    addTodo("オフラインTODO 2");
+    addTodo("オフラインTODO 3");
+
+    // この時点ではキューに積まれているだけ (同期待ちバッジ表示)
+    assertThat(page.getByText("同期待ち")).hasCount(3);
+
+    // Act 2: オンライン復帰
+    page.context().setOffline(false);
+
+    // Assert — 同期完了後、3件のみ存在する (重複していない)
+    // 同期待ちバッジが消えるのを待つ
+    assertThat(page.getByText("同期待ち")).hasCount(0);
+    assertThat(page.getByText("オフラインTODO 1")).hasCount(1);
+    assertThat(page.getByText("オフラインTODO 2")).hasCount(1);
+    assertThat(page.getByText("オフラインTODO 3")).hasCount(1);
+  }
+
   private void addTodo(String text) {
     page.getByPlaceholder("新しいTODOを入力...").fill(text);
     page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("追加")).click();

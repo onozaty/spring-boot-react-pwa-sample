@@ -4,10 +4,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
-import { toast } from 'sonner'
 import { routeTree } from './routeTree.gen'
-import { todosQueryKey } from './hooks/use-todos'
-import { processSyncQueue } from './hooks/use-todos'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -17,6 +14,9 @@ const queryClient = new QueryClient({
       gcTime: 1000 * 60 * 10,
       retry: 1,
       refetchOnWindowFocus: false,
+      // networkMode: 'always' = オフラインでも query/mutation を実行させる。
+      // TODO 機能は IndexedDB をソースに動くため、navigator.onLine が false でも
+      // queryFn (fetchAndSyncTodos) や mutationFn を呼んでもらう必要がある。
       networkMode: 'always',
     },
     mutations: {
@@ -25,36 +25,11 @@ const queryClient = new QueryClient({
   },
 })
 
-// Service Worker 登録
+// vite.config.ts で registerType: 'autoUpdate' にしているので、
+// 新 SW が install されたら自動でアクティブ化 + ページリロードされる。
 registerSW({ immediate: true })
 
-// SW からの同期完了通知を受け取る
-const syncChannel = new BroadcastChannel('todo-sync')
-syncChannel.addEventListener('message', (event) => {
-  if (event.data?.type === 'TODOS_UPDATED') {
-    queryClient.invalidateQueries({ queryKey: todosQueryKey })
-  }
-  if (event.data?.type === 'SYNC_COMPLETED') {
-    toast.success('オフライン中の変更を同期しました')
-  }
-})
-
-// オンライン復帰時の同期トリガー
-window.addEventListener('online', async () => {
-  // Background Sync API 対応ブラウザ
-  if ('serviceWorker' in navigator && 'SyncManager' in window) {
-    const reg = await navigator.serviceWorker.ready
-    await (
-      reg as ServiceWorkerRegistration & {
-        sync: { register(tag: string): Promise<void> }
-      }
-    ).sync.register('todo-sync')
-  } else {
-    // フォールバック: 直接処理
-    await processSyncQueue()
-    queryClient.invalidateQueries({ queryKey: todosQueryKey })
-  }
-})
+// オンライン復帰時のキュー消化は useReachability フック (__root.tsx で起動) が担う。
 
 const router = createRouter({ routeTree, context: { queryClient } })
 

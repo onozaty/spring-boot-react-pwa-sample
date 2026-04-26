@@ -135,7 +135,7 @@ export interface paths {
         put?: never;
         /**
          * ログアウト
-         * @description JWT Cookie を削除します
+         * @description 現在の端末のセッションのみを破棄し、JWT Cookie を削除します
          */
         post: operations["logout"];
         delete?: never;
@@ -179,9 +179,26 @@ export interface paths {
         head?: never;
         /**
          * パスワード変更
-         * @description ログイン中ユーザーのパスワードを変更します
+         * @description ログイン中ユーザーのパスワードを変更します。他端末のセッションは失効します。
          */
         patch: operations["changePassword"];
+        trace?: never;
+    };
+    "/api/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ヘルスチェック */
+        get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/auth/me": {
@@ -771,6 +788,24 @@ export interface operations {
             };
             /** @description 現在のパスワードが正しくない */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
