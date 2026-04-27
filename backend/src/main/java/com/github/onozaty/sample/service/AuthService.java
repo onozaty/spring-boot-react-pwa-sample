@@ -10,7 +10,9 @@ import com.github.onozaty.sample.mapper.UserCredentialMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
@@ -132,14 +134,23 @@ public class AuthService {
     return sessionId;
   }
 
+  private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+  private static final int REFRESH_TOKEN_BYTES = 32;
+
   public String issueRefreshToken(String sessionId) {
-    String plainToken = UUID.randomUUID().toString();
+    String plainToken = generateRefreshToken();
     String tokenHash = sha256(plainToken);
 
     OffsetDateTime expiresAt = OffsetDateTime.now().plusDays(jwtProperties.refreshExpirationDays());
     refreshTokenMapper.insert(sessionId, tokenHash, expiresAt);
 
     return plainToken;
+  }
+
+  private static String generateRefreshToken() {
+    byte[] bytes = new byte[REFRESH_TOKEN_BYTES];
+    SECURE_RANDOM.nextBytes(bytes);
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
   public String validateAndRotateRefreshToken(String plainToken) {
