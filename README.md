@@ -9,7 +9,56 @@ Spring Boot と React を組み合わせた PWA サンプルプロジェクト�
 - PWA 対応（Service Worker による静的アセットのキャッシュ、ホーム画面追加）
 - オフライン対応（ネットワーク切断時の TODO 操作を IndexedDB にキューイングし、復帰時にバックエンドへ同期）
 
-認証は JWT を httpOnly + SameSite=Strict な Cookie に格納するステートレス方式で、短命なアクセストークン（既定 15 分）と長命なリフレッシュトークン（既定 7 日）の組み合わせによるサイレントリフレッシュに対応しています。
+## 認証方式
+
+httpOnly + SameSite=Strict な Cookie に認証情報を格納するステートレス方式で、短命なアクセストークンと長命なリフレッシュトークンの組み合わせによるサイレントリフレッシュに対応しています。
+
+| 種別                       | Cookie 名       | Path                 | 形式                              | 既定の有効期間 | 保存先                                         |
+| -------------------------- | --------------- | -------------------- | --------------------------------- | -------------- | ---------------------------------------------- |
+| アクセストークン           | `ACCESS_TOKEN`  | `/`                  | JWT (HS256, Nimbus JOSE)          | 15 分          | クライアント Cookie のみ（DB には保持しない）  |
+| リフレッシュトークン       | `REFRESH_TOKEN` | `/api/auth/refresh`  | 不透明トークン（UUID）            | 7 日           | DB には SHA-256 ハッシュのみを保存             |
+
+実装上のポイント:
+
+- リフレッシュトークンは平文を Cookie でクライアントに渡し、サーバー側は SHA-256 ハッシュのみを保存する（DB 流出時にトークン本体が漏れない）。
+- リフレッシュトークン Cookie は `Path=/api/auth/refresh` に限定し、通常 API には送信されない。
+- `/api/auth/refresh` 利用時にトークンをローテーション（旧トークンを `DELETE` し新トークンを発行）。並行リクエスト時は `DELETE` の影響行数で二重ローテーションを検出し、再利用された側は 401 にする。
+- セッションは `sessions` テーブルで管理し、パスワード変更時は現在のセッションを除き全失効、ログアウト時は当該セッションを失効させる（リフレッシュトークンは `ON DELETE CASCADE` で連動削除）。
+- フロントエンド (`src/lib/api-client.ts`) では openapi-fetch のミドルウェアで 401 を捕捉し、`/api/auth/refresh` を 1 回だけ呼んで成功時に元リクエストを再送する。並行する 401 は同じ refresh 結果を共有する。
+
+## オフライン対応
+
+PWA としてのキャッシュは [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) (Workbox) が静的アセットの precache を担当し、TODO データは IndexedDB を一次ストアとして扱い、UI は常にここを参照する独自の同期エンジンで管理しています。
+
+### サーバー到達可能性の判定（ヘルスチェック）
+
+`navigator.onLine` だけでは「ネットワーク接続あり/サーバー死んでる」「キャプティブポータル」などを判別できないため、`/api/health` への HEAD 相当の GET を組み合わせて判定しています（`src/hooks/use-reachability.ts`）。
+
+- `navigator.onLine === false` のときは即 `reachable=false`（ヘルスチェックは停止）。
+- `navigator.onLine === true` のときは `/api/health` を **30 秒間隔**でポーリング（TanStack Query の `refetchInterval`）。
+- 非アクティブタブではポーリングを停止し、`visibilitychange` でアクティブに戻った瞬間に即時再チェック。
+- 初期値は楽観的に `true`（ヘルスチェック完了前でも API を試す）。
+- `false → true` 遷移を検知したタイミングで sync-queue の消化を起動する。
+
+### IndexedDB によるローカル保持
+
+[idb](https://github.com/jakearchibald/idb) を使い、DB 名 `pwa-sample` に以下 2 ストアを持ちます（`src/lib/todo-store.ts`）。
+
+| ストア       | キー       | 用途                                                                                            |
+| ------------ | ---------- | ----------------------------------------------------------------------------------------------- |
+| `todos`      | `localId`  | TODO レコード（`syncStatus: 'synced' \| 'pending'` を持ち、UI は常にこのストアを描画する）      |
+| `sync-queue` | `id`       | オフライン中に積まれた create / update / delete オペレーション（discriminated union で型保証） |
+
+同期エンジン（`src/lib/sync-queue.ts`）の挙動:
+
+- オンライン時の mutation は **API → IDB** の順に反映する。
+- `reachable === false` のときは IDB に楽観的に書き、`sync-queue` に op を積む。サーバー側未採番の create は `localId` を仮 ID として保持し、`syncStatus: 'pending'` で UI に区別表示する。
+- `reachable` が `false → true` に遷移したとき、`sync-queue` を作成順に消化する。
+  - 成功 → dequeue。create はサーバー採番 ID で再 upsert し、仮 localId のレコードを削除する。
+  - HTTP エラー（4xx / 5xx）→ 永続失敗とみなしトーストで通知して dequeue（再送しても成功しないため）。
+  - ネットワーク失敗（fetch 自体の throw）→ op をキューに残し、次回オンライン復帰時に再試行。
+
+これにより、ブラウザを閉じてもオフライン中の変更は IndexedDB に保持され、次回起動時にサーバーへ反映されます。
 
 ## 構成
 
