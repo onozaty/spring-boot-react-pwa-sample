@@ -48,8 +48,8 @@ client.use({
 
     const url = new URL(request.url)
     const path = url.pathname
-    // リフレッシュ・me エンドポイント自体は再試行しない（無限ループ防止）
-    if (path === '/api/auth/refresh' || path === '/api/auth/me') {
+    // refresh 自体の 401 はリフレッシュ不能なのでログインへ
+    if (path === '/api/auth/refresh') {
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
@@ -64,7 +64,8 @@ client.use({
       return response
     }
 
-    // リフレッシュ成功 → 元リクエストをリトライ
+    // リフレッシュ成功 → 元リクエストをリトライ。retryRequest は生 fetch で
+    // 直接送るためこの onResponse は再帰せず、リトライ後の 401 はそのまま返る。
     const retryRequest = retryRequests.get(request) ?? request
     return globalThis.fetch(retryRequest)
   },

@@ -49,6 +49,59 @@ describe('api-client refresh on 401', () => {
     expect(result.data).toMatchObject({ text: 'hello' })
   })
 
+  it('concurrent 401s share a single refresh call (in-flight de-dup)', async () => {
+    let todosCallCount = 0
+    let meCallCount = 0
+    let refreshCallCount = 0
+    // refresh を遅らせて、2 つ目の 401 が onResponse に到達する前に
+    // 1 つ目の refresh が完了しないようにする。これが無いと
+    // tryRefresh の in-flight 共有を実質的に検証できない。
+    let releaseRefresh: (() => void) | null = null
+    const refreshGate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve
+    })
+
+    server.use(
+      http.get('http://localhost:3000/api/todos', () => {
+        todosCallCount += 1
+        if (todosCallCount === 1) {
+          return new HttpResponse(null, { status: 401 })
+        }
+        return HttpResponse.json([])
+      }),
+      http.get('http://localhost:3000/api/auth/me', () => {
+        meCallCount += 1
+        if (meCallCount === 1) {
+          return new HttpResponse(null, { status: 401 })
+        }
+        return HttpResponse.json({
+          id: 1,
+          email: 'user@example.com',
+          name: 'user',
+        })
+      }),
+      http.post('http://localhost:3000/api/auth/refresh', async () => {
+        refreshCallCount += 1
+        await refreshGate
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+
+    const todosPromise = client.GET('/api/todos')
+    const mePromise = client.GET('/api/auth/me')
+    // 両 401 が onResponse に到達してから refresh を解放する。
+    await new Promise((r) => setTimeout(r, 10))
+    releaseRefresh!()
+
+    const [todosResult, meResult] = await Promise.all([todosPromise, mePromise])
+
+    expect(refreshCallCount).toBe(1)
+    expect(todosCallCount).toBe(2)
+    expect(meCallCount).toBe(2)
+    expect(todosResult.response.status).toBe(200)
+    expect(meResult.response.status).toBe(200)
+  })
+
   it('GET (no body): 401 → refresh → retry succeeds', async () => {
     let callCount = 0
     let refreshCalled = false
