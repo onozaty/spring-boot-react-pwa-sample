@@ -10,6 +10,10 @@ const client = createClient<paths>({
 let isRefreshing = false
 let refreshPromise: Promise<boolean> | null = null
 
+// body を含む Request は一度 fetch すると再利用できない。401 時のリトライに
+// 備え、送信前のクローンを保持しておく。
+const retryRequests = new WeakMap<Request, Request>()
+
 async function tryRefresh(): Promise<boolean> {
   if (isRefreshing) {
     return refreshPromise!
@@ -35,6 +39,10 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 client.use({
+  onRequest({ request }) {
+    retryRequests.set(request, request.clone())
+    return request
+  },
   async onResponse({ response, request }) {
     if (response.status !== 401) return response
 
@@ -57,7 +65,8 @@ client.use({
     }
 
     // リフレッシュ成功 → 元リクエストをリトライ
-    return globalThis.fetch(request)
+    const retryRequest = retryRequests.get(request) ?? request
+    return globalThis.fetch(retryRequest)
   },
 })
 
