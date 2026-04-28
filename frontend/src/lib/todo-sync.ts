@@ -42,7 +42,7 @@ import {
 type ServerTodo = components['schemas']['Todo']
 
 // HTTP エラー (4xx/5xx) を表す例外。fetch の throw (通信失敗) と区別するため。
-export class HttpError extends Error {
+class HttpError extends Error {
   status: number
   constructor(status: number) {
     super(`API request failed: ${status}`)
