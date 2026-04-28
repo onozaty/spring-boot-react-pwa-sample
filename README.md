@@ -60,6 +60,19 @@ PWA としてのキャッシュは [vite-plugin-pwa](https://vite-pwa-org.netlif
 
 これにより、ブラウザを閉じてもオフライン中の変更は IndexedDB に保持され、次回起動時にサーバーへ反映されます。
 
+### PWA 動作確認時の注意
+
+`vite-plugin-pwa` はデフォルトで Service Worker を本番ビルド時にのみ登録します。`pnpm dev` (`./gradlew :frontend:dev`) で起動した開発サーバーでは Service Worker が登録されず、オフライン状態でリロードするとページの読み込みに失敗します。PWA としてのオフライン動作を確認する場合は、ビルド成果物を `vite preview` で配信してください。`pnpm preview:build` でビルド → 配信を一括実行できます。
+
+```bash
+# Gradle から実行する場合
+./gradlew :frontend:preview_build
+
+# pnpm から直接実行する場合
+cd frontend
+pnpm preview:build
+```
+
 ## 構成
 
 ```
@@ -167,6 +180,8 @@ pnpm dev
 ```
 
 起動後、http://localhost:5173 でアクセスできます。
+
+> **PWA / オフライン動作の確認について**: 開発サーバーでは Service Worker が登録されないため、オフライン状態のリロードなど PWA の挙動は確認できません。確認する場合は本番ビルドして `vite preview` で配信してください。詳細は [PWA 動作確認時の注意](#pwa-動作確認時の注意) を参照してください。
 
 ### 初期ユーザー
 
