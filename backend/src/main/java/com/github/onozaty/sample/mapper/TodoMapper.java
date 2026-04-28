@@ -34,7 +34,7 @@ public interface TodoMapper {
   @Select(
       """
       INSERT INTO todos (user_id, text, done, created_at, updated_at)
-      VALUES (#{userId}, #{input.text}, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      VALUES (#{userId}, #{input.text}, COALESCE(#{input.done}, FALSE), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *
       """)
   Todo insert(@Param("userId") long userId, @Param("input") TodoCreateInput input);

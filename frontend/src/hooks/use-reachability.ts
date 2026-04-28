@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { processSyncQueue } from '@/lib/sync-queue'
+import { processSyncQueue } from '@/lib/todo-sync'
 import { todosQueryKey } from '@/lib/todo-store'
 
 const HEALTH_CHECK_INTERVAL_MS = 30_000

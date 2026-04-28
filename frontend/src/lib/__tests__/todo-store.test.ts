@@ -128,7 +128,7 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     await enqueueSyncOp({
       type: 'create',
       localId: 'local-1',
-      payload: { text: 'テスト' },
+      payload: { text: 'テスト', done: false },
     })
     const ops = await getPendingSyncOps()
 
@@ -136,7 +136,7 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     expect(ops).toHaveLength(1)
     expect(ops[0].type).toBe('create')
     expect(ops[0].localId).toBe('local-1')
-    expect(ops[0].payload).toEqual({ text: 'テスト' })
+    expect(ops[0].payload).toEqual({ text: 'テスト', done: false })
     expect(ops[0].id).toBeDefined()
     expect(ops[0].createdAt).toBeDefined()
   })
@@ -151,7 +151,7 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     await enqueueSyncOp({
       type: 'create',
       localId: 'local-1',
-      payload: { text: 't1' },
+      payload: { text: 't1', done: false },
     })
     await wait(2)
     await enqueueSyncOp({
@@ -182,7 +182,7 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     await enqueueSyncOp({
       type: 'create',
       localId: 'local-1',
-      payload: { text: 't1' },
+      payload: { text: 't1', done: false },
     })
     await wait(2)
     await enqueueSyncOp({
@@ -202,6 +202,64 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
   })
 })
 
+describe('updatePendingCreateDone', () => {
+  it('指定 localId の create op の done が書き換わる', async () => {
+    // Arrange
+    const { enqueueSyncOp, getPendingSyncOps, updatePendingCreateDone } =
+      await getStore()
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 't1', done: false },
+    })
+
+    // Act
+    await updatePendingCreateDone('local-1', true)
+    const ops = await getPendingSyncOps()
+
+    // Assert
+    expect(ops).toHaveLength(1)
+    expect(ops[0].type).toBe('create')
+    expect(ops[0].payload).toEqual({ text: 't1', done: true })
+  })
+
+  it('別 localId の create op は書き換わらない', async () => {
+    // Arrange
+    const { enqueueSyncOp, getPendingSyncOps, updatePendingCreateDone } =
+      await getStore()
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 't1', done: false },
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-2',
+      payload: { text: 't2', done: false },
+    })
+
+    // Act
+    await updatePendingCreateDone('local-1', true)
+    const ops = await getPendingSyncOps()
+
+    // Assert
+    const t1 = ops.find((op) => op.localId === 'local-1')
+    const t2 = ops.find((op) => op.localId === 'local-2')
+    expect(t1?.payload).toEqual({ text: 't1', done: true })
+    expect(t2?.payload).toEqual({ text: 't2', done: false })
+  })
+
+  it('一致する create op がなくても例外にならない', async () => {
+    // Arrange
+    const { updatePendingCreateDone } = await getStore()
+
+    // Act & Assert
+    await expect(
+      updatePendingCreateDone('non-existent', true),
+    ).resolves.toBeUndefined()
+  })
+})
+
 describe('removeSyncOpsByLocalId', () => {
   it('localId に一致する操作がまとめて削除される', async () => {
     // Arrange
@@ -212,7 +270,7 @@ describe('removeSyncOpsByLocalId', () => {
     await enqueueSyncOp({
       type: 'create',
       localId: 'local-1',
-      payload: { text: 't1' },
+      payload: { text: 't1', done: false },
     })
     await enqueueSyncOp({
       type: 'update',
@@ -222,7 +280,7 @@ describe('removeSyncOpsByLocalId', () => {
     await enqueueSyncOp({
       type: 'create',
       localId: 'local-2',
-      payload: { text: 't2' },
+      payload: { text: 't2', done: false },
     })
     await removeSyncOpsByLocalId('local-1')
     const ops = await getPendingSyncOps()

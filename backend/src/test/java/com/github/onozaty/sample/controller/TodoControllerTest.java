@@ -68,6 +68,28 @@ class TodoControllerTest {
   }
 
   @Test
+  void testCreateWithDoneTrue() {
+    // Arrange — done=true で作成 (オフライン中にチェックされた TODO の同期で使われる)
+    var input = createInput("既に完了している作業");
+    input.setDone(true);
+
+    // Act
+    ResponseEntity<Todo> response =
+        restClient
+            .post()
+            .uri("/api/todos")
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(input)
+            .retrieve()
+            .toEntity(Todo.class);
+
+    // Assert
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    var created = response.getBody();
+    assertThat(created.isDone()).isTrue();
+  }
+
+  @Test
   void testFindAll() {
     // Arrange
     createTodo("TODO 1");

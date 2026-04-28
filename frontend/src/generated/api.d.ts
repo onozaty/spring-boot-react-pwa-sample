@@ -360,6 +360,11 @@ export interface components {
         TodoCreateInput: {
             /** @description テキスト */
             text: string;
+            /**
+             * @description 完了フラグ
+             * @default false
+             */
+            done?: boolean;
         };
         /** @description ログインリクエスト */
         LoginRequest: {

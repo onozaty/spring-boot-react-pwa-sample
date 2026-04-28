@@ -21,7 +21,11 @@ export interface TodoRecord {
 // sync-queue に積む操作。type ごとに payload の形が決まる discriminated union。
 // 取り出し側は `switch (op.type)` で payload 型が自動的に絞り込まれる。
 export type SyncOp =
-  | { type: 'create'; localId: string; payload: { text: string } }
+  | {
+      type: 'create'
+      localId: string
+      payload: { text: string; done: boolean }
+    }
   | {
       type: 'update'
       localId: string
@@ -133,6 +137,28 @@ export async function removeSyncOpsByLocalId(localId: string): Promise<void> {
     all
       .filter((op) => op.localId === localId)
       .map((op) => tx.store.delete(op.id)),
+  )
+  await tx.done
+}
+
+// 未送信の 'create' op の done を更新する。
+// オフライン中に追加した TODO (serverId 未採番) のチェックを切り替えるとき、
+// update op は積めない (serverId が無い) ので、create op 自体の payload を書き換える。
+export async function updatePendingCreateDone(
+  localId: string,
+  done: boolean,
+): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction('sync-queue', 'readwrite')
+  const all = await tx.store.getAll()
+  const targets = all.filter(
+    (op): op is SyncQueueRecord & { type: 'create' } =>
+      op.type === 'create' && op.localId === localId,
+  )
+  await Promise.all(
+    targets.map((op) =>
+      tx.store.put({ ...op, payload: { ...op.payload, done } }),
+    ),
   )
   await tx.done
 }

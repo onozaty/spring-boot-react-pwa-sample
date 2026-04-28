@@ -49,6 +49,19 @@ class TodoServiceTest {
   }
 
   @Test
+  void testCreateWithDoneTrue() {
+    // Arrange — done=true で作成 (オフライン中にチェックされた TODO の同期で使われる)
+    var input = createInput("既に完了している作業");
+    input.setDone(true);
+
+    // Act
+    Todo created = todoService.create(userId, input);
+
+    // Assert
+    assertThat(created.isDone()).isTrue();
+  }
+
+  @Test
   void testFindAllEmpty() {
     // Act
     var todos = todoService.findAll(userId);
