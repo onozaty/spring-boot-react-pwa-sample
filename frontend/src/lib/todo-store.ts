@@ -6,7 +6,6 @@ const DB_NAME = 'pwa-sample'
 // useTodos / useReachability から共通参照されるため、このストアに併置する。
 export const todosQueryKey = ['todos'] as const
 export const syncQueueQueryKey = ['sync-queue'] as const
-export const syncFailureQueryKey = ['sync-failure'] as const
 
 export type SyncStatus = 'synced' | 'pending'
 

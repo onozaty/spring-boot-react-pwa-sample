@@ -6,15 +6,21 @@ import {
 } from '@tanstack/react-router'
 import { render, type RenderOptions } from '@testing-library/react'
 import { meQueryOptions } from '@/hooks/use-auth'
+import { SyncFailureProvider } from '@/hooks/use-sync-failure'
 import { routeTree } from '../routeTree.gen'
 import { mockAuthUser } from './handlers'
 
 interface Options extends Omit<RenderOptions, 'wrapper'> {
   initialEntries?: string[]
+  initialSyncFailure?: boolean
 }
 
 export function renderRoute(options: Options = {}) {
-  const { initialEntries = ['/'], ...renderOptions } = options
+  const {
+    initialEntries = ['/'],
+    initialSyncFailure = false,
+    ...renderOptions
+  } = options
 
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -43,7 +49,9 @@ export function renderRoute(options: Options = {}) {
 
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <SyncFailureProvider initialValue={initialSyncFailure}>
+        <RouterProvider router={router} />
+      </SyncFailureProvider>
     </QueryClientProvider>,
     renderOptions,
   )

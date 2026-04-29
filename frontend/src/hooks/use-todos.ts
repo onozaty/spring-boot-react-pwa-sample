@@ -3,7 +3,6 @@ import { toast } from 'sonner'
 import {
   getPendingSyncOps,
   getTodos,
-  syncFailureQueryKey,
   syncQueueQueryKey,
   todosQueryKey,
   type TodoRecord,
@@ -16,7 +15,8 @@ import {
   processSyncQueue,
   toggleTodoSynced,
 } from '@/lib/todo-sync'
-import { useReachability } from './use-reachability'
+import { useReachability } from '@/hooks/use-reachability'
+import { useSyncFailure } from '@/hooks/use-sync-failure'
 
 export { todosQueryKey }
 
@@ -33,13 +33,14 @@ export function useTodos() {
 export function useTodoMutations() {
   const queryClient = useQueryClient()
   const reachable = useReachability()
+  const { setHasSyncFailure } = useSyncFailure()
 
   // ミューテーション後は IDB から直接読み取って即時に React Query キャッシュへ反映する。
   // invalidateQueries だとサーバー往復の re-fetch が走って UI 反映に 0.5 秒程度のラグが出るため。
   const refreshFromIdb = async () => {
     const fresh = await getTodos()
     queryClient.setQueryData<TodoRecord[]>(todosQueryKey, fresh)
-    queryClient.setQueryData(syncFailureQueryKey, false)
+    setHasSyncFailure(false)
     queryClient.invalidateQueries({ queryKey: syncQueueQueryKey })
   }
 
@@ -72,15 +73,9 @@ export function useSyncQueueStatus() {
   })
 }
 
-export function useSyncFailureStatus() {
-  return useQuery({
-    queryKey: syncFailureQueryKey,
-    queryFn: () => false,
-  })
-}
-
 export function useSyncQueueActions() {
   const queryClient = useQueryClient()
+  const { setHasSyncFailure } = useSyncFailure()
 
   const refreshQueries = () => {
     queryClient.invalidateQueries({ queryKey: syncQueueQueryKey })
@@ -90,7 +85,7 @@ export function useSyncQueueActions() {
   const retrySync = useMutation({
     mutationFn: processSyncQueue,
     onSuccess: (result) => {
-      queryClient.setQueryData(syncFailureQueryKey, result.failed)
+      setHasSyncFailure(result.failed)
       refreshQueries()
       if (result.failed) {
         // ユーザーが明示的に押した「再試行」なので失敗をその場で通知する。
@@ -107,7 +102,7 @@ export function useSyncQueueActions() {
   const discardSync = useMutation({
     mutationFn: discardPendingSyncQueue,
     onSuccess: (result) => {
-      queryClient.setQueryData(syncFailureQueryKey, false)
+      setHasSyncFailure(false)
       refreshQueries()
       if (result.resynced) {
         toast.success('未同期の変更を破棄しました')

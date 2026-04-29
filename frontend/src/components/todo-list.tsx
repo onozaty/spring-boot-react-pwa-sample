@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useReachability } from '@/hooks/use-reachability'
+import { useSyncFailure } from '@/hooks/use-sync-failure'
 import {
-  useSyncFailureStatus,
   useSyncQueueActions,
   useSyncQueueStatus,
   useTodoMutations,
@@ -27,7 +27,7 @@ export function TodoList() {
   const isReachable = useReachability()
   const { data: todos, isPending, isError } = useTodos()
   const { data: syncQueueStatus } = useSyncQueueStatus()
-  const { data: hasSyncFailure = false } = useSyncFailureStatus()
+  const { hasSyncFailure } = useSyncFailure()
   const { createTodo, toggleTodo, deleteTodo } = useTodoMutations()
   const { retrySync, discardSync } = useSyncQueueActions()
   const shouldShowSyncFailure =

@@ -2,12 +2,9 @@ import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useBrowserOnline } from '@/hooks/use-browser-online'
+import { useSyncFailure } from '@/hooks/use-sync-failure'
 import { processSyncQueue } from '@/lib/todo-sync'
-import {
-  syncFailureQueryKey,
-  syncQueueQueryKey,
-  todosQueryKey,
-} from '@/lib/todo-store'
+import { syncQueueQueryKey, todosQueryKey } from '@/lib/todo-store'
 
 const HEALTH_CHECK_INTERVAL_MS = 30_000
 
@@ -70,6 +67,7 @@ export function useReachabilityEffects(): void {
   const queryClient = useQueryClient()
   const reachable = useReachability()
   const browserOnline = useBrowserOnline()
+  const { setHasSyncFailure } = useSyncFailure()
 
   // タブが表示状態に戻ったらヘルスチェックを即実行
   useEffect(() => {
@@ -104,12 +102,12 @@ export function useReachabilityEffects(): void {
 
     void (async () => {
       const result = await processSyncQueue()
-      queryClient.setQueryData(syncFailureQueryKey, result.failed)
+      setHasSyncFailure(result.failed)
       queryClient.invalidateQueries({ queryKey: syncQueueQueryKey })
       if (!result.failed && result.processed > 0) {
         queryClient.invalidateQueries({ queryKey: todosQueryKey })
         toast.success('オフライン中の変更を同期しました')
       }
     })()
-  }, [reachable, queryClient])
+  }, [reachable, queryClient, setHasSyncFailure])
 }

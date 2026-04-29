@@ -226,7 +226,7 @@ describe('TodoList', () => {
 
   it('同期失敗後に未同期キューが残っていると同期失敗アラートを表示する', async () => {
     // Arrange
-    const { enqueueSyncOp, resetDB, syncFailureQueryKey, upsertTodo } =
+    const { enqueueSyncOp, resetDB, upsertTodo } =
       await import('@/lib/todo-store')
     await resetDB()
     await upsertTodo({
@@ -245,8 +245,7 @@ describe('TodoList', () => {
     })
 
     // Act
-    const { queryClient } = renderRoute({ initialEntries: ['/todos'] })
-    queryClient.setQueryData(syncFailureQueryKey, true)
+    renderRoute({ initialEntries: ['/todos'], initialSyncFailure: true })
 
     // Assert
     await waitFor(() => {
