@@ -284,17 +284,35 @@ export async function processSyncQueue(): Promise<SyncQueueResult> {
   return { processed, failed: false }
 }
 
-export async function discardPendingSyncQueue(): Promise<void> {
+// ユーザーが「破棄」を選んだ場合、サーバー一覧の再取得が失敗してもローカルの
+// キュー/仮 TODO は確実にクリアする。失敗を理由に破棄を不能にするとユーザーが
+// 詰むため、サーバー反映は best-effort で行う (失敗時は次回 fetchAndSyncTodos で
+// 整合する)。
+// 戻り値の resynced はサーバー一覧と再同期できたかを示す。呼び出し元はこれを使って
+// 「破棄完了」と「サーバー再同期は次回オンライン時」を出し分ける。
+export async function discardPendingSyncQueue(): Promise<{
+  resynced: boolean
+}> {
   const ops = await getPendingSyncOps()
-  const res = await client.GET('/api/todos')
-  const data = ensureOk(res)
   for (const op of ops) {
     if (op.type === 'create') {
       await deleteTodo(op.localId)
     }
   }
   await clearSyncQueue()
+
+  let data: ServerTodo[] | undefined
+  try {
+    const res = await client.GET('/api/todos')
+    if (res.response.ok) {
+      data = res.data
+    }
+  } catch {
+    // 通信失敗時は IDB の現在状態のまま。次回 fetchAndSyncTodos で同期される。
+  }
+  if (!data) return { resynced: false }
   await syncLocalTodosWithServer(data)
+  return { resynced: true }
 }
 
 // 1件の op を処理する。

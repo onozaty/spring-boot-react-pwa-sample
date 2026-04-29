@@ -101,10 +101,16 @@ export function useSyncQueueActions() {
 
   const discardSync = useMutation({
     mutationFn: discardPendingSyncQueue,
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.setQueryData(syncFailureQueryKey, false)
       refreshQueries()
-      toast.success('未同期の変更を破棄しました')
+      if (result.resynced) {
+        toast.success('未同期の変更を破棄しました')
+      } else {
+        toast.info(
+          '未同期の変更を破棄しました。サーバーとの再同期は次回オンライン時に行われます',
+        )
+      }
     },
     onError: () => toast.error('未同期の変更の破棄に失敗しました'),
   })

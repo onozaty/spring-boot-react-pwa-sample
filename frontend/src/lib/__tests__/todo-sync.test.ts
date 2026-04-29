@@ -250,8 +250,9 @@ describe('discardPendingSyncQueue', () => {
       payload: { text: '破棄する作成', done: false },
     })
 
-    await discardPendingSyncQueue()
+    const result = await discardPendingSyncQueue()
 
+    expect(result).toEqual({ resynced: true })
     expect(await getPendingSyncOps()).toHaveLength(0)
     const todos = await getTodos()
     expect(todos).toHaveLength(1)
@@ -260,5 +261,77 @@ describe('discardPendingSyncQueue', () => {
       text: 'サーバー側のTODO',
       syncStatus: 'synced',
     })
+  })
+
+  it('サーバー一覧取得が HTTP エラーでも、ローカルの未同期キュー/仮 TODO はクリアされる', async () => {
+    const {
+      upsertTodo,
+      enqueueSyncOp,
+      getPendingSyncOps,
+      getTodos,
+      discardPendingSyncQueue,
+    } = await getModules()
+    server.use(
+      http.get('*/api/todos', () =>
+        HttpResponse.json({ message: 'error' }, { status: 500 }),
+      ),
+    )
+
+    await upsertTodo({
+      localId: 'local-discard',
+      serverId: null,
+      userId: 0,
+      text: '破棄する作成',
+      done: false,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-discard',
+      payload: { text: '破棄する作成', done: false },
+    })
+
+    const result = await discardPendingSyncQueue()
+
+    expect(result).toEqual({ resynced: false })
+    expect(await getPendingSyncOps()).toHaveLength(0)
+    expect(await getTodos()).toHaveLength(0)
+  })
+
+  it('サーバー一覧取得がネットワーク失敗でも、ローカルの未同期キュー/仮 TODO はクリアされる', async () => {
+    const {
+      upsertTodo,
+      enqueueSyncOp,
+      getPendingSyncOps,
+      getTodos,
+      discardPendingSyncQueue,
+    } = await getModules()
+    server.use(
+      http.get('*/api/todos', () => {
+        throw new TypeError('network error')
+      }),
+    )
+
+    await upsertTodo({
+      localId: 'local-discard',
+      serverId: null,
+      userId: 0,
+      text: '破棄する作成',
+      done: false,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-discard',
+      payload: { text: '破棄する作成', done: false },
+    })
+
+    const result = await discardPendingSyncQueue()
+
+    expect(result).toEqual({ resynced: false })
+    expect(await getPendingSyncOps()).toHaveLength(0)
+    expect(await getTodos()).toHaveLength(0)
   })
 })
