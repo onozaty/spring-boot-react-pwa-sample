@@ -38,11 +38,7 @@ export function TodoList() {
     const trimmed = text.trim()
     if (!trimmed) return
     createTodo.mutate(trimmed, {
-      onSuccess: () => {
-        setText('')
-        if (!isReachable)
-          toast.info('オフライン：オンライン復帰後に同期されます')
-      },
+      onSuccess: () => setText(''),
       onError: () => toast.error('TODOの追加に失敗しました'),
     })
   }
