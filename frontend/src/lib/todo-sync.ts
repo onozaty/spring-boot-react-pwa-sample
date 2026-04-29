@@ -272,7 +272,7 @@ export async function processSyncQueue(): Promise<SyncQueueResult> {
   for (const op of ops) {
     try {
       await runQueuedOp(op)
-      await dequeueSyncOp(op.id)
+      await dequeueSyncOp(op.seq)
       processed++
     } catch {
       return { processed, failed: true }

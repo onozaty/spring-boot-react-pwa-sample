@@ -36,10 +36,13 @@ export type SyncOp =
 
 export type SyncOpType = SyncOp['type']
 
-// IDB に保存する形 (id と createdAt は enqueue 時に付与)。
+// IDB に保存・取り出しされる形。seq は autoIncrement により enqueue 時に IDB が
+// 採番する単調増加の整数で、primary key 兼順序キーとして機能する。
+// 読み出し側は seq が必ず付与された状態で受け取るためここでは必須型にしている。
+// add() 時は seq 未付与のオブジェクトを渡す必要があるが、そのキャストは
+// enqueueSyncOp 内で局所化する。
 export type SyncQueueRecord = SyncOp & {
-  id: string
-  createdAt: string
+  seq: number
 }
 
 interface PwaSampleDB extends DBSchema {
@@ -52,16 +55,12 @@ interface PwaSampleDB extends DBSchema {
     }
   }
   'sync-queue': {
-    key: string
+    key: number
     value: SyncQueueRecord
-    indexes: {
-      byCreatedAt: string
-    }
   }
 }
 
 let dbPromise: Promise<IDBPDatabase<PwaSampleDB>> | null = null
-let lastSyncOpCreatedAtMs = 0
 
 function getDB(): Promise<IDBPDatabase<PwaSampleDB>> {
   if (!dbPromise) {
@@ -71,8 +70,12 @@ function getDB(): Promise<IDBPDatabase<PwaSampleDB>> {
         todoStore.createIndex('byServerId', 'serverId')
         todoStore.createIndex('bySyncStatus', 'syncStatus')
 
-        const queueStore = db.createObjectStore('sync-queue', { keyPath: 'id' })
-        queueStore.createIndex('byCreatedAt', 'createdAt')
+        // seq を keyPath にしつつ autoIncrement で採番させる。
+        // primary key 順 = enqueue 順なので追加のインデックスは不要。
+        db.createObjectStore('sync-queue', {
+          keyPath: 'seq',
+          autoIncrement: true,
+        })
       },
     })
   }
@@ -110,26 +113,17 @@ export async function getTodoByServerId(
   return db.getFromIndex('todos', 'byServerId', serverId)
 }
 
-// 受け取る op は discriminated union なので、type ごとに payload の形が型レベルで保証される。
+// seq は IDB が autoIncrement で採番するため、ここでは渡さない。
+// add() の引数型は seq を要求するが実際の IDB 挙動と異なるためキャストで吸収する。
+// 読み出し側 (getPendingSyncOps 等) では seq が必ず存在する状態で取り出される。
 export async function enqueueSyncOp(op: SyncOp): Promise<void> {
   const db = await getDB()
-  const record: SyncQueueRecord = {
-    ...op,
-    id: crypto.randomUUID(),
-    createdAt: nextSyncOpCreatedAt(),
-  }
-  await db.put('sync-queue', record)
+  await db.add('sync-queue', op as SyncQueueRecord)
 }
 
-function nextSyncOpCreatedAt(): string {
-  const now = Date.now()
-  lastSyncOpCreatedAtMs = Math.max(now, lastSyncOpCreatedAtMs + 1)
-  return new Date(lastSyncOpCreatedAtMs).toISOString()
-}
-
-export async function dequeueSyncOp(id: string): Promise<void> {
+export async function dequeueSyncOp(seq: number): Promise<void> {
   const db = await getDB()
-  await db.delete('sync-queue', id)
+  await db.delete('sync-queue', seq)
 }
 
 export async function clearSyncQueue(): Promise<void> {
@@ -137,19 +131,20 @@ export async function clearSyncQueue(): Promise<void> {
   await db.clear('sync-queue')
 }
 
+// primary key (= seq) 順に返る。enqueue 順と一致する。
 export async function getPendingSyncOps(): Promise<SyncQueueRecord[]> {
   const db = await getDB()
-  return db.getAllFromIndex('sync-queue', 'byCreatedAt')
+  return db.getAll('sync-queue')
 }
 
 export async function removeSyncOpsByLocalId(localId: string): Promise<void> {
   const db = await getDB()
-  const all = await db.getAll('sync-queue')
   const tx = db.transaction('sync-queue', 'readwrite')
+  const all = await tx.store.getAll()
   await Promise.all(
     all
       .filter((op) => op.localId === localId)
-      .map((op) => tx.store.delete(op.id)),
+      .map((op) => tx.store.delete(op.seq)),
   )
   await tx.done
 }

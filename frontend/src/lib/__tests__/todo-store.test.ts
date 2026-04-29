@@ -137,15 +137,12 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     expect(ops[0].type).toBe('create')
     expect(ops[0].localId).toBe('local-1')
     expect(ops[0].payload).toEqual({ text: 'テスト', done: false })
-    expect(ops[0].id).toBeDefined()
-    expect(ops[0].createdAt).toBeDefined()
+    expect(ops[0].seq).toBeGreaterThan(0)
   })
 
-  it('getPendingSyncOps は createdAt 順で返る', async () => {
-    // Arrange — 時刻差を確保するため 2ms ずつ間隔を空けて enqueue する
+  it('getPendingSyncOps は enqueue 順 (seq 昇順) で返る', async () => {
+    // Arrange
     const { enqueueSyncOp, getPendingSyncOps } = await getStore()
-    const wait = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms))
 
     // Act
     await enqueueSyncOp({
@@ -153,13 +150,11 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
       localId: 'local-1',
       payload: { text: 't1', done: false },
     })
-    await wait(2)
     await enqueueSyncOp({
       type: 'update',
       localId: 'local-2',
       payload: { serverId: 2, text: 't2', done: false },
     })
-    await wait(2)
     await enqueueSyncOp({
       type: 'delete',
       localId: 'local-3',
@@ -172,19 +167,19 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     expect(ops[0].type).toBe('create')
     expect(ops[1].type).toBe('update')
     expect(ops[2].type).toBe('delete')
+    // seq は単調増加していること
+    expect(ops[0].seq).toBeLessThan(ops[1].seq)
+    expect(ops[1].seq).toBeLessThan(ops[2].seq)
   })
 
   it('dequeueSyncOp で指定した操作が削除される', async () => {
     // Arrange
     const { enqueueSyncOp, getPendingSyncOps, dequeueSyncOp } = await getStore()
-    const wait = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms))
     await enqueueSyncOp({
       type: 'create',
       localId: 'local-1',
       payload: { text: 't1', done: false },
     })
-    await wait(2)
     await enqueueSyncOp({
       type: 'update',
       localId: 'local-2',
@@ -193,12 +188,43 @@ describe('enqueueSyncOp / getPendingSyncOps / dequeueSyncOp', () => {
     const [first] = await getPendingSyncOps()
 
     // Act
-    await dequeueSyncOp(first.id)
+    await dequeueSyncOp(first.seq)
     const remaining = await getPendingSyncOps()
 
     // Assert
     expect(remaining).toHaveLength(1)
     expect(remaining[0].localId).toBe('local-2')
+  })
+
+  it('dequeue 後に enqueue した op の seq は前のレコードと衝突しない', async () => {
+    // Arrange
+    const { enqueueSyncOp, getPendingSyncOps, dequeueSyncOp } = await getStore()
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 't1', done: false },
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-2',
+      payload: { text: 't2', done: false },
+    })
+    const [first, second] = await getPendingSyncOps()
+    await dequeueSyncOp(first.seq)
+
+    // Act
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-3',
+      payload: { text: 't3', done: false },
+    })
+
+    // Assert — autoIncrement が単調増加するので、新 op の seq は既存より大きい
+    const ops = await getPendingSyncOps()
+    expect(ops).toHaveLength(2)
+    expect(ops[0].localId).toBe('local-2')
+    expect(ops[1].localId).toBe('local-3')
+    expect(ops[1].seq).toBeGreaterThan(second.seq)
   })
 })
 
@@ -257,6 +283,36 @@ describe('updatePendingCreateDone', () => {
     await expect(
       updatePendingCreateDone('non-existent', true),
     ).resolves.toBeUndefined()
+  })
+})
+
+describe('resetDB', () => {
+  it('resetDB 後に enqueue した op の seq は 1 から振り直される', async () => {
+    // Arrange — IDB の autoIncrement カウンタを進めた状態を作る
+    const { enqueueSyncOp, getPendingSyncOps, resetDB } = await getStore()
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-1',
+      payload: { text: 't1', done: false },
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-2',
+      payload: { text: 't2', done: false },
+    })
+
+    // Act
+    await resetDB()
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-after-reset',
+      payload: { text: 'after', done: false },
+    })
+    const ops = await getPendingSyncOps()
+
+    // Assert — IDB ごと削除されるので、autoIncrement のカウンタも 1 に戻る
+    expect(ops).toHaveLength(1)
+    expect(ops[0].seq).toBe(1)
   })
 })
 
