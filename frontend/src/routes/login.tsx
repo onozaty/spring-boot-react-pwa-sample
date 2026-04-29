@@ -26,7 +26,7 @@ function LoginPage() {
     setIsPending(true)
 
     try {
-      const { response, data } = await client.POST('/api/auth/login', {
+      const { response } = await client.POST('/api/auth/login', {
         body: { email, password },
       })
 
@@ -37,9 +37,11 @@ function LoginPage() {
 
       // 前ユーザーのローカルデータが残っているケースに備えてクリアしてから遷移する。
       await clearLocalUserData()
-      // ログイン応答をそのままキャッシュへ書き込む。これがないと遷移先の
-      // useQuery(meQueryOptions) が /api/auth/me を即再フェッチしてしまう。
-      queryClient.setQueryData(meQueryOptions.queryKey, data ?? null)
+      // 前ユーザーの me キャッシュ (null や旧 User) を破棄してから遷移する。
+      // ensureQueryData は cachedData が undefined 以外なら fetch を省略するため、
+      // remove せずに navigate すると __root.tsx の beforeLoad が古いキャッシュを返してしまい、
+      // /api/auth/me が再 fetch されず SW の auth-me キャッシュも更新されない。
+      queryClient.removeQueries({ queryKey: meQueryOptions.queryKey })
       navigate({ to: '/' })
     } catch {
       setError('ログインに失敗しました。')

@@ -63,6 +63,7 @@
     "vite": "^8.0.4",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.4",
+    "workbox-cacheable-response": "^7.4.0",
     "workbox-expiration": "^7.4.0",
     "workbox-precaching": "^7.4.0",
     "workbox-routing": "^7.4.0",

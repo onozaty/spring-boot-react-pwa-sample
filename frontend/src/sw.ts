@@ -5,9 +5,10 @@ import {
   createHandlerBoundToURL,
   precacheAndRoute,
 } from 'workbox-precaching'
-import { CacheFirst } from 'workbox-strategies'
+import { CacheFirst, NetworkFirst } from 'workbox-strategies'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 import { ExpirationPlugin } from 'workbox-expiration'
+import { CacheableResponsePlugin } from 'workbox-cacheable-response'
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>
@@ -33,9 +34,22 @@ registerRoute(
   }),
 )
 
-// API レスポンスは SW でキャッシュしない。
+// API レスポンスは原則 SW でキャッシュしない。
 // TODO は IndexedDB を真のソースとし、認証情報やユーザーデータを
 // キャッシュ経由で別アカウントに漏らさないため。
+//
+// 例外として /api/auth/me のみ NetworkFirst でキャッシュする。
+// オフラインリロード時にヘッダのユーザー表示と認証ガードが詰むのを避けるため。
+// オンライン時はネットワーク優先なので別アカウントに切り替わってもキャッシュは即上書きされる。
+registerRoute(
+  ({ url, request }) =>
+    request.method === 'GET' && url.pathname === '/api/auth/me',
+  new NetworkFirst({
+    cacheName: 'auth-me',
+    networkTimeoutSeconds: 3,
+    plugins: [new CacheableResponsePlugin({ statuses: [200] })],
+  }),
+)
 
 // 静的アセット: Cache First
 registerRoute(

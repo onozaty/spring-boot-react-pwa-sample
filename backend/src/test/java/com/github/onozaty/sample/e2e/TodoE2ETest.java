@@ -194,6 +194,25 @@ class TodoE2ETest {
     assertThat(page.getByText("オフラインTODO 3")).hasCount(1);
   }
 
+  @Test
+  void testOfflineReloadKeepsAppFunctional() {
+    // Arrange — オンラインで TODO を作成し、SW がアクティブになるまで一度リロードしておく。
+    // SW は初回訪問では fetch を制御しないため、オフラインリロード前にオンラインで
+    // 1 度リロードして SW の制御下に入った状態を作る。
+    addTodo("リロードしても見えるはずのTODO");
+    page.reload();
+    assertThat(page.getByText("リロードしても見えるはずのTODO")).isVisible();
+
+    // Act — オフライン化してリロード
+    page.context().setOffline(true);
+    page.reload();
+
+    // Assert — エラー UI に飛ばず、ヘッダのユーザー名と既存 TODO が表示される
+    assertThat(page.getByText("Something went wrong")).not().isVisible();
+    assertThat(page.locator("header").getByText("admin")).isVisible();
+    assertThat(page.getByText("リロードしても見えるはずのTODO")).isVisible();
+  }
+
   private void addTodo(String text) {
     page.getByPlaceholder("新しいTODOを入力...").fill(text);
     page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("追加")).click();
