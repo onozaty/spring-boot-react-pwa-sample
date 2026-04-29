@@ -137,6 +137,31 @@ class AuthControllerTest {
   }
 
   @Test
+  void testAccessTokenIsRejectedAfterLogout() {
+    // Arrange
+    String accessCookie = loginAndGetAccessCookie();
+
+    restClient
+        .post()
+        .uri("/api/auth/logout")
+        .header("Cookie", accessCookie)
+        .retrieve()
+        .toBodilessEntity();
+
+    // Act & Assert — ログアウトで削除された session の access token は拒否される
+    ResponseEntity<Void> response =
+        restClient
+            .get()
+            .uri("/api/todos")
+            .header("Cookie", accessCookie)
+            .retrieve()
+            .onStatus(status -> status.is4xxClientError(), (req, res) -> {})
+            .toBodilessEntity();
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+  }
+
+  @Test
   void testLogoutDoesNotAffectOtherSessions() {
     // Arrange — 同じユーザーで 2 セッションを作成し、片方でログアウトする
     String sessionACookie = loginAndGetAccessCookie();
@@ -270,7 +295,7 @@ class AuthControllerTest {
   void testChangePassword() {
     // Arrange — 現在のセッション (current) と他端末セッション (other) を作成
     String currentAccessCookie = loginAndGetAccessCookie();
-    String otherRefreshCookie = loginAndGetRefreshCookie();
+    AuthCookies otherCookies = loginAndGetCookies();
 
     // Act
     ResponseEntity<Void> response =
@@ -302,11 +327,22 @@ class AuthControllerTest {
         restClient
             .post()
             .uri("/api/auth/refresh")
-            .header("Cookie", otherRefreshCookie)
+            .header("Cookie", otherCookies.refreshCookie())
             .retrieve()
             .onStatus(status -> status.is4xxClientError(), (req, res) -> {})
             .toBodilessEntity();
     assertThat(otherRefreshResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+    // 他端末の access token も、JWT の有効期限内であっても拒否される
+    ResponseEntity<Void> otherAccessResponse =
+        restClient
+            .get()
+            .uri("/api/todos")
+            .header("Cookie", otherCookies.accessCookie())
+            .retrieve()
+            .onStatus(status -> status.is4xxClientError(), (req, res) -> {})
+            .toBodilessEntity();
+    assertThat(otherAccessResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
   }
 
   @Test
@@ -344,14 +380,14 @@ class AuthControllerTest {
   }
 
   private String loginAndGetAccessCookie() {
-    return loginAndGetCookie(JwtTokenService.ACCESS_TOKEN_COOKIE_NAME);
+    return loginAndGetCookies().accessCookie();
   }
 
   private String loginAndGetRefreshCookie() {
-    return loginAndGetCookie(JwtTokenService.REFRESH_TOKEN_COOKIE_NAME);
+    return loginAndGetCookies().refreshCookie();
   }
 
-  private String loginAndGetCookie(String cookieName) {
+  private AuthCookies loginAndGetCookies() {
     var response =
         restClient
             .post()
@@ -361,10 +397,18 @@ class AuthControllerTest {
             .retrieve()
             .toBodilessEntity();
 
+    return new AuthCookies(
+        extractCookie(response, JwtTokenService.ACCESS_TOKEN_COOKIE_NAME),
+        extractCookie(response, JwtTokenService.REFRESH_TOKEN_COOKIE_NAME));
+  }
+
+  private String extractCookie(ResponseEntity<?> response, String cookieName) {
     return response.getHeaders().get("Set-Cookie").stream()
         .filter(v -> v.startsWith(cookieName + "="))
         .map(v -> v.split(";")[0])
         .findFirst()
         .orElseThrow();
   }
+
+  private record AuthCookies(String accessCookie, String refreshCookie) {}
 }

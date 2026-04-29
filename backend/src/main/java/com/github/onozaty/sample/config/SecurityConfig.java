@@ -1,5 +1,6 @@
 package com.github.onozaty.sample.config;
 
+import com.github.onozaty.sample.mapper.SessionMapper;
 import com.github.onozaty.sample.security.CookieBearerTokenResolver;
 import com.github.onozaty.sample.security.UserPrincipal;
 import com.github.onozaty.sample.service.JwtTokenService;
@@ -11,6 +12,7 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -29,11 +31,15 @@ public class SecurityConfig {
 
   private final JwtTokenService jwtTokenService;
   private final CookieBearerTokenResolver cookieBearerTokenResolver;
+  private final SessionMapper sessionMapper;
 
   public SecurityConfig(
-      JwtTokenService jwtTokenService, CookieBearerTokenResolver cookieBearerTokenResolver) {
+      JwtTokenService jwtTokenService,
+      CookieBearerTokenResolver cookieBearerTokenResolver,
+      SessionMapper sessionMapper) {
     this.jwtTokenService = jwtTokenService;
     this.cookieBearerTokenResolver = cookieBearerTokenResolver;
+    this.sessionMapper = sessionMapper;
   }
 
   @Bean
@@ -79,6 +85,9 @@ public class SecurityConfig {
       long userId = (Long) jwt.getClaim(JwtTokenService.CLAIM_USER_ID);
       String email = jwt.getSubject();
       String sessionId = jwt.getClaim(JwtTokenService.CLAIM_SESSION_ID);
+      if (sessionId == null || sessionMapper.findById(sessionId).isEmpty()) {
+        throw new BadCredentialsException("Authenticated session not found");
+      }
       UserPrincipal principal = new UserPrincipal(userId, email, sessionId);
       return new UsernamePasswordAuthenticationToken(principal, jwt, Collections.emptyList());
     };
