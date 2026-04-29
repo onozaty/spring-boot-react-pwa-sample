@@ -44,19 +44,19 @@ PWA としてのキャッシュは [vite-plugin-pwa](https://vite-pwa-org.netlif
 
 [idb](https://github.com/jakearchibald/idb) を使い、DB 名 `pwa-sample` に以下 2 ストアを持ちます（`src/lib/todo-store.ts`）。
 
-| ストア       | キー       | 用途                                                                                            |
-| ------------ | ---------- | ----------------------------------------------------------------------------------------------- |
-| `todos`      | `localId`  | TODO レコード（`syncStatus: 'synced' \| 'pending'` を持ち、UI は常にこのストアを描画する）      |
-| `sync-queue` | `id`       | オフライン中に積まれた create / update / delete オペレーション（discriminated union で型保証） |
+| ストア       | キー      | 用途                                                                                                       |
+| ------------ | --------- | ---------------------------------------------------------------------------------------------------------- |
+| `todos`      | `localId` | TODO レコード（`syncStatus: 'synced' \| 'pending'` を持ち、UI は常にこのストアを描画する）                 |
+| `sync-queue` | `seq`     | オフライン中に積まれた create / update / delete オペレーション（`autoIncrement` で採番、enqueue 順を保証） |
 
-同期エンジン（`src/lib/sync-queue.ts`）の挙動:
+同期エンジン（`src/lib/todo-sync.ts`）の挙動:
 
 - オンライン時の mutation は **API → IDB** の順に反映する。
 - `reachable === false` のときは IDB に楽観的に書き、`sync-queue` に op を積む。サーバー側未採番の create は `localId` を仮 ID として保持し、`syncStatus: 'pending'` で UI に区別表示する。
 - `reachable` が `false → true` に遷移したとき、`sync-queue` を作成順に消化する。
   - 成功 → dequeue。create はサーバー採番 ID で再 upsert し、仮 localId のレコードを削除する。
-  - HTTP エラー（4xx / 5xx）→ 永続失敗とみなしトーストで通知して dequeue（再送しても成功しないため）。
-  - ネットワーク失敗（fetch 自体の throw）→ op をキューに残し、次回オンライン復帰時に再試行。
+  - HTTP エラー（4xx / 5xx）／ネットワーク失敗（fetch 自体の throw）いずれも op をキューに残したまま消化を停止する。後続 op は前の op に依存しうるため、最初の失敗で止めてユーザーの変更を失わないようにしている。
+  - 失敗時の通知はライブラリ層では行わず、呼び出し元（自動同期 / 手動再試行）が文脈に応じて出し分ける。
 
 これにより、ブラウザを閉じてもオフライン中の変更は IndexedDB に保持され、次回起動時にサーバーへ反映されます。
 
