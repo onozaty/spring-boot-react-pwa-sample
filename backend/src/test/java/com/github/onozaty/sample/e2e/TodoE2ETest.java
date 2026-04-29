@@ -202,6 +202,9 @@ class TodoE2ETest {
     addTodo("リロードしても見えるはずのTODO");
     page.reload();
     assertThat(page.getByText("リロードしても見えるはずのTODO")).isVisible();
+    // SW が確実にページの controller になるまで待つ。これがないと直後の
+    // setOffline + reload が SW 経由ではなく素のネットワークに行って失敗することがある。
+    page.waitForFunction("() => navigator.serviceWorker.controller !== null");
 
     // Act — オフライン化してリロード
     page.context().setOffline(true);

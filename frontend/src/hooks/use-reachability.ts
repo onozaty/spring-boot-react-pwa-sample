@@ -1,6 +1,7 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useBrowserOnline } from '@/hooks/use-browser-online'
 import { processSyncQueue } from '@/lib/todo-sync'
 import { todosQueryKey } from '@/lib/todo-store'
 
@@ -21,20 +22,6 @@ async function checkReachable(): Promise<boolean> {
   }
 }
 
-// navigator.onLine を useSyncExternalStore で購読する。
-// 複数コンポーネントから呼んでも window のイベントリスナーは React が内部的に共有する。
-function subscribeOnline(callback: () => void): () => void {
-  window.addEventListener('online', callback)
-  window.addEventListener('offline', callback)
-  return () => {
-    window.removeEventListener('online', callback)
-    window.removeEventListener('offline', callback)
-  }
-}
-function getBrowserOnline(): boolean {
-  return navigator.onLine
-}
-
 /**
  * サーバーへの到達可能性を表す状態を返す。複数コンポーネントから自由に呼んでよい。
  *
@@ -46,11 +33,7 @@ function getBrowserOnline(): boolean {
  * `useReachabilityEffects` を `__root.tsx` で 1 回だけ呼ぶことで起動する。
  */
 export function useReachability(): boolean {
-  const browserOnline = useSyncExternalStore(
-    subscribeOnline,
-    getBrowserOnline,
-    () => true,
-  )
+  const browserOnline = useBrowserOnline()
 
   // useQuery を polling として使う:
   // - refetchInterval で 30 秒ごとに checkReachable を実行
@@ -76,11 +59,13 @@ export function useReachability(): boolean {
  *
  * 起動する副作用:
  * - `visibilitychange` でタブ表示時にヘルスチェックを即実行
+ * - `navigator.onLine` の `false → true` 遷移時にヘルスチェックを即実行
  * - `false → true` 遷移時に `processSyncQueue` を呼びキューを消化
  */
 export function useReachabilityEffects(): void {
   const queryClient = useQueryClient()
   const reachable = useReachability()
+  const browserOnline = useBrowserOnline()
 
   // タブが表示状態に戻ったらヘルスチェックを即実行
   useEffect(() => {
@@ -92,6 +77,19 @@ export function useReachabilityEffects(): void {
     document.addEventListener('visibilitychange', handler)
     return () => document.removeEventListener('visibilitychange', handler)
   }, [queryClient])
+
+  // navigator.onLine が true になったらヘルスチェックを即実行する。
+  // online イベントハンドラから直接 invalidate すると、ハンドラ実行時点では
+  // useQuery の enabled がまだ false なので fetch がスキップされる。
+  // 値の変化として扱うことで、enabled=true になった後のエフェクトで
+  // invalidate されて確実に fetch される。
+  // マウント時 (browserOnline=true) の invalidate は useQuery 初回 fetch と
+  // dedupe されるため実害なし。
+  useEffect(() => {
+    if (browserOnline) {
+      queryClient.invalidateQueries({ queryKey: reachabilityQueryKey })
+    }
+  }, [browserOnline, queryClient])
 
   // false → true の遷移を検知してキューを消化する
   const prevReachable = useRef(reachable)
