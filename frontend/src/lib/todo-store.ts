@@ -5,6 +5,8 @@ const DB_NAME = 'pwa-sample'
 // React Query で TODO 一覧を識別するキー。
 // useTodos / useReachability から共通参照されるため、このストアに併置する。
 export const todosQueryKey = ['todos'] as const
+export const syncQueueQueryKey = ['sync-queue'] as const
+export const syncFailureQueryKey = ['sync-failure'] as const
 
 export type SyncStatus = 'synced' | 'pending'
 
@@ -60,6 +62,7 @@ interface PwaSampleDB extends DBSchema {
 }
 
 let dbPromise: Promise<IDBPDatabase<PwaSampleDB>> | null = null
+let lastSyncOpCreatedAtMs = 0
 
 function getDB(): Promise<IDBPDatabase<PwaSampleDB>> {
   if (!dbPromise) {
@@ -114,14 +117,25 @@ export async function enqueueSyncOp(op: SyncOp): Promise<void> {
   const record: SyncQueueRecord = {
     ...op,
     id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
+    createdAt: nextSyncOpCreatedAt(),
   }
   await db.put('sync-queue', record)
+}
+
+function nextSyncOpCreatedAt(): string {
+  const now = Date.now()
+  lastSyncOpCreatedAtMs = Math.max(now, lastSyncOpCreatedAtMs + 1)
+  return new Date(lastSyncOpCreatedAtMs).toISOString()
 }
 
 export async function dequeueSyncOp(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('sync-queue', id)
+}
+
+export async function clearSyncQueue(): Promise<void> {
+  const db = await getDB()
+  await db.clear('sync-queue')
 }
 
 export async function getPendingSyncOps(): Promise<SyncQueueRecord[]> {

@@ -125,3 +125,140 @@ describe('processSyncQueue: オフライン中の create + toggle 後にオン�
     expect(todos[0].done).toBe(false)
   })
 })
+
+describe('processSyncQueue: 同期失敗時', () => {
+  it('HTTP エラー時は失敗した op をキューに残し、後続 op を処理しない', async () => {
+    const { upsertTodo, enqueueSyncOp, getPendingSyncOps, processSyncQueue } =
+      await getModules()
+    let postCount = 0
+    let putCount = 0
+    server.use(
+      http.post('*/api/todos', () => {
+        postCount += 1
+        return HttpResponse.json({ message: 'error' }, { status: 500 })
+      }),
+      http.put('*/api/todos/:id', () => {
+        putCount += 1
+        return HttpResponse.json({})
+      }),
+    )
+
+    await upsertTodo({
+      localId: 'local-create',
+      serverId: null,
+      userId: 0,
+      text: '同期されない作成',
+      done: false,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await upsertTodo({
+      localId: 'server-10',
+      serverId: 10,
+      userId: 99,
+      text: '後続の更新',
+      done: true,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-create',
+      payload: { text: '同期されない作成', done: false },
+    })
+    await enqueueSyncOp({
+      type: 'update',
+      localId: 'server-10',
+      payload: { serverId: 10, text: '後続の更新', done: true },
+    })
+
+    const result = await processSyncQueue()
+
+    expect(result).toEqual({ processed: 0, failed: true })
+    expect(postCount).toBe(1)
+    expect(putCount).toBe(0)
+    expect(await getPendingSyncOps()).toHaveLength(2)
+  })
+
+  it('ネットワーク失敗時も失敗した op をキューに残す', async () => {
+    const { upsertTodo, enqueueSyncOp, getPendingSyncOps, processSyncQueue } =
+      await getModules()
+    server.use(
+      http.post('*/api/todos', () => {
+        throw new TypeError('network error')
+      }),
+    )
+
+    await upsertTodo({
+      localId: 'local-network-error',
+      serverId: null,
+      userId: 0,
+      text: '通信失敗',
+      done: false,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-network-error',
+      payload: { text: '通信失敗', done: false },
+    })
+
+    const result = await processSyncQueue()
+
+    expect(result).toEqual({ processed: 0, failed: true })
+    expect(await getPendingSyncOps()).toHaveLength(1)
+  })
+})
+
+describe('discardPendingSyncQueue', () => {
+  it('未同期 create の仮 TODO とキューを破棄し、サーバー一覧で同期する', async () => {
+    const {
+      upsertTodo,
+      enqueueSyncOp,
+      getPendingSyncOps,
+      getTodos,
+      discardPendingSyncQueue,
+    } = await getModules()
+    server.use(
+      http.get('*/api/todos', () =>
+        HttpResponse.json([
+          {
+            id: 20,
+            userId: 99,
+            text: 'サーバー側のTODO',
+            done: false,
+            createdAt: '2026-04-27T00:00:01Z',
+            updatedAt: '2026-04-27T00:00:01Z',
+          },
+        ]),
+      ),
+    )
+
+    await upsertTodo({
+      localId: 'local-discard',
+      serverId: null,
+      userId: 0,
+      text: '破棄する作成',
+      done: false,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-discard',
+      payload: { text: '破棄する作成', done: false },
+    })
+
+    await discardPendingSyncQueue()
+
+    expect(await getPendingSyncOps()).toHaveLength(0)
+    const todos = await getTodos()
+    expect(todos).toHaveLength(1)
+    expect(todos[0]).toMatchObject({
+      localId: 'server-20',
+      text: 'サーバー側のTODO',
+      syncStatus: 'synced',
+    })
+  })
+})

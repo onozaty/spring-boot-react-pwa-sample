@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { client } from '@/lib/api-client'
 import type { components } from '@/generated/api'
 import {
+  clearSyncQueue,
   deleteTodo,
   dequeueSyncOp,
   enqueueSyncOp,
@@ -40,6 +41,7 @@ import {
 } from '@/lib/todo-store'
 
 type ServerTodo = components['schemas']['Todo']
+export type SyncQueueResult = { processed: number; failed: boolean }
 
 // HTTP エラー (4xx/5xx) を表す例外。fetch の throw (通信失敗) と区別するため。
 class HttpError extends Error {
@@ -133,29 +135,30 @@ export async function fetchAndSyncTodos(
   }
 
   if (data) {
-    // サーバーの全 TODO を IDB に反映 (upsert)。
-    // serverToLocal の localId が一意なので、既存レコードの上書きになる。
-    const serverIds = new Set(data.map((t) => t.id))
-    for (const todo of data) {
-      await upsertTodo(serverToLocal(todo))
-    }
-    // 他端末で削除された TODO は、ローカルにだけ残っているので消す。
-    //
-    // 「IDB を全削除してサーバー応答で再構築」ではなく差分削除にしているのは、
-    // 未同期のローカル TODO (serverId === null, sync-queue に create op を持つ) を
-    // 巻き込まないため。上の pendingOps チェックで通常は未同期 TODO が無い前提だが、
-    // pendingOps チェック後にこのブロックへ来るまでの間に他タブやミューテーションで
-    // 新しい未同期 TODO が追加される余地があり、全削除するとそれが消えて
-    // sync-queue に create op だけ残り、後続の同期でゾンビ TODO がサーバーに作られる。
-    // serverId を持つものだけ消す方針なら、未同期 TODO は対象外なので安全。
-    const local = await getTodos()
-    for (const t of local) {
-      if (t.serverId && !serverIds.has(t.serverId)) {
-        await deleteTodo(t.localId)
-      }
-    }
+    await syncLocalTodosWithServer(data)
   }
   return getTodos()
+}
+
+async function syncLocalTodosWithServer(data: ServerTodo[]): Promise<void> {
+  // サーバーの全 TODO を IDB に反映 (upsert)。
+  // serverToLocal の localId が一意なので、既存レコードの上書きになる。
+  const serverIds = new Set(data.map((t) => t.id))
+  for (const todo of data) {
+    await upsertTodo(serverToLocal(todo))
+  }
+  // 他端末で削除された TODO は、ローカルにだけ残っているので消す。
+  //
+  // 「IDB を全削除してサーバー応答で再構築」ではなく差分削除にしているのは、
+  // 未同期のローカル TODO (serverId === null, sync-queue に create op を持つ) を
+  // 巻き込まないため。serverId を持つものだけ消す方針なら、未同期 TODO は
+  // 対象外なので安全。
+  const local = await getTodos()
+  for (const t of local) {
+    if (t.serverId && !serverIds.has(t.serverId)) {
+      await deleteTodo(t.localId)
+    }
+  }
 }
 
 // online/offline を吸収する単発オーケストレーション。
@@ -259,12 +262,9 @@ export async function deleteTodoSynced(
 }
 
 // オフライン中に積まれた sync-queue を順番に消化する。
-// 処理結果は3種類:
-//   - 成功            → dequeue
-//   - ネットワーク失敗 → op をキューに残し、次回オンライン復帰時に再試行
-//   - HTTP エラー      → 永続失敗として toast 通知 + dequeue (再送しても成功しないので破棄)
-// 戻り値: 成功して dequeue した op 数 (toast 抑制のため)。
-export async function processSyncQueue(): Promise<number> {
+// HTTP エラー / ネットワーク失敗はいずれもユーザーの変更を失わないようキューに残す。
+// 後続 op は前の op に依存する可能性があるため、最初の失敗で停止する。
+export async function processSyncQueue(): Promise<SyncQueueResult> {
   const ops = await getPendingSyncOps()
   let processed = 0
   for (const op of ops) {
@@ -274,14 +274,27 @@ export async function processSyncQueue(): Promise<number> {
       processed++
     } catch (e) {
       if (e instanceof HttpError) {
-        // 永続失敗: 残しても無意味なので破棄。ユーザーには通知する。
         toast.error(`オフライン中の変更の同期に失敗しました (HTTP ${e.status})`)
-        await dequeueSyncOp(op.id)
+      } else {
+        toast.error('オフライン中の変更の同期に失敗しました')
       }
-      // ネットワーク失敗: op をキューに残して次回オンライン復帰時に再試行
+      return { processed, failed: true }
     }
   }
-  return processed
+  return { processed, failed: false }
+}
+
+export async function discardPendingSyncQueue(): Promise<void> {
+  const ops = await getPendingSyncOps()
+  const res = await client.GET('/api/todos')
+  const data = ensureOk(res)
+  for (const op of ops) {
+    if (op.type === 'create') {
+      await deleteTodo(op.localId)
+    }
+  }
+  await clearSyncQueue()
+  await syncLocalTodosWithServer(data)
 }
 
 // 1件の op を処理する。

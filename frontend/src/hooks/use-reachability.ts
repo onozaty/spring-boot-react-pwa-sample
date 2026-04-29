@@ -3,7 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useBrowserOnline } from '@/hooks/use-browser-online'
 import { processSyncQueue } from '@/lib/todo-sync'
-import { todosQueryKey } from '@/lib/todo-store'
+import {
+  syncFailureQueryKey,
+  syncQueueQueryKey,
+  todosQueryKey,
+} from '@/lib/todo-store'
 
 const HEALTH_CHECK_INTERVAL_MS = 30_000
 
@@ -99,8 +103,10 @@ export function useReachabilityEffects(): void {
     if (!wasUnreachable || !reachable) return
 
     void (async () => {
-      const processed = await processSyncQueue()
-      if (processed > 0) {
+      const result = await processSyncQueue()
+      queryClient.setQueryData(syncFailureQueryKey, result.failed)
+      queryClient.invalidateQueries({ queryKey: syncQueueQueryKey })
+      if (!result.failed && result.processed > 0) {
         queryClient.invalidateQueries({ queryKey: todosQueryKey })
         toast.success('オフライン中の変更を同期しました')
       }

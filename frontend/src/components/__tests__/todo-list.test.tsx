@@ -191,4 +191,70 @@ describe('TodoList', () => {
       screen.queryByText('TODOの取得に失敗しました'),
     ).not.toBeInTheDocument()
   })
+
+  it('未同期キューが残っているだけでは同期失敗アラートを表示しない', async () => {
+    // Arrange
+    const { enqueueSyncOp, resetDB, upsertTodo } =
+      await import('@/lib/todo-store')
+    await resetDB()
+    await upsertTodo({
+      localId: 'local-pending',
+      serverId: null,
+      userId: 0,
+      text: '未同期のTODO',
+      done: false,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-pending',
+      payload: { text: '未同期のTODO', done: false },
+    })
+
+    // Act
+    renderRoute({ initialEntries: ['/todos'] })
+
+    // Assert
+    await waitFor(() => {
+      expect(screen.getByText('未同期のTODO')).toBeInTheDocument()
+    })
+    expect(
+      screen.queryByText('同期できない変更があります。'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('同期失敗後に未同期キューが残っていると同期失敗アラートを表示する', async () => {
+    // Arrange
+    const { enqueueSyncOp, resetDB, syncFailureQueryKey, upsertTodo } =
+      await import('@/lib/todo-store')
+    await resetDB()
+    await upsertTodo({
+      localId: 'local-failed',
+      serverId: null,
+      userId: 0,
+      text: '同期失敗したTODO',
+      done: false,
+      updatedAt: '2026-04-27T00:00:00.000Z',
+      syncStatus: 'pending',
+    })
+    await enqueueSyncOp({
+      type: 'create',
+      localId: 'local-failed',
+      payload: { text: '同期失敗したTODO', done: false },
+    })
+
+    // Act
+    const { queryClient } = renderRoute({ initialEntries: ['/todos'] })
+    queryClient.setQueryData(syncFailureQueryKey, true)
+
+    // Assert
+    await waitFor(() => {
+      expect(
+        screen.getByText('同期できない変更があります。'),
+      ).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: '再試行' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '破棄' })).toBeInTheDocument()
+  })
 })

@@ -1,9 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getTodos, todosQueryKey, type TodoRecord } from '@/lib/todo-store'
+import { toast } from 'sonner'
+import {
+  getPendingSyncOps,
+  getTodos,
+  syncFailureQueryKey,
+  syncQueueQueryKey,
+  todosQueryKey,
+  type TodoRecord,
+} from '@/lib/todo-store'
 import {
   createTodoSynced,
   deleteTodoSynced,
+  discardPendingSyncQueue,
   fetchAndSyncTodos,
+  processSyncQueue,
   toggleTodoSynced,
 } from '@/lib/todo-sync'
 import { useReachability } from './use-reachability'
@@ -29,6 +39,8 @@ export function useTodoMutations() {
   const refreshFromIdb = async () => {
     const fresh = await getTodos()
     queryClient.setQueryData<TodoRecord[]>(todosQueryKey, fresh)
+    queryClient.setQueryData(syncFailureQueryKey, false)
+    queryClient.invalidateQueries({ queryKey: syncQueueQueryKey })
   }
 
   const createTodo = useMutation({
@@ -48,4 +60,54 @@ export function useTodoMutations() {
   })
 
   return { createTodo, toggleTodo, deleteTodo: deleteTodoMutation }
+}
+
+export function useSyncQueueStatus() {
+  return useQuery({
+    queryKey: syncQueueQueryKey,
+    queryFn: async () => {
+      const ops = await getPendingSyncOps()
+      return { pendingCount: ops.length }
+    },
+  })
+}
+
+export function useSyncFailureStatus() {
+  return useQuery({
+    queryKey: syncFailureQueryKey,
+    queryFn: () => false,
+  })
+}
+
+export function useSyncQueueActions() {
+  const queryClient = useQueryClient()
+
+  const refreshQueries = () => {
+    queryClient.invalidateQueries({ queryKey: syncQueueQueryKey })
+    queryClient.invalidateQueries({ queryKey: todosQueryKey })
+  }
+
+  const retrySync = useMutation({
+    mutationFn: processSyncQueue,
+    onSuccess: (result) => {
+      queryClient.setQueryData(syncFailureQueryKey, result.failed)
+      refreshQueries()
+      if (result.failed) return
+      if (result.processed > 0) {
+        toast.success('オフライン中の変更を同期しました')
+      }
+    },
+  })
+
+  const discardSync = useMutation({
+    mutationFn: discardPendingSyncQueue,
+    onSuccess: () => {
+      queryClient.setQueryData(syncFailureQueryKey, false)
+      refreshQueries()
+      toast.success('未同期の変更を破棄しました')
+    },
+    onError: () => toast.error('未同期の変更の破棄に失敗しました'),
+  })
+
+  return { retrySync, discardSync }
 }
