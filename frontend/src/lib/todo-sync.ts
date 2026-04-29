@@ -22,7 +22,6 @@
  *
  * レイヤー: use-todos (hook bind) → todo-sync (このファイル) → todo-store (IDB)
  */
-import { toast } from 'sonner'
 import { client } from '@/lib/api-client'
 import type { components } from '@/generated/api'
 import {
@@ -80,7 +79,8 @@ export function serverToLocal(todo: ServerTodo): TodoRecord {
 // - 成功                              → サーバー応答を返す (delete のみ void)
 // - HTTP エラー (4xx/5xx)             → HttpError を throw
 // - ネットワーク失敗 (fetch 自体の throw) → そのまま throw (TypeError 等)
-// 呼び出し側は `useMutation.onError` でこれらを拾う、もしくは processSyncQueue 側で分岐する。
+// 呼び出し側 (processSyncQueue / useMutation 等) は失敗を catch して扱う。
+// HttpError とそれ以外を区別したい用途のために型を分けてある。
 export async function createTodoOnServer(
   text: string,
   done: boolean = false,
@@ -264,6 +264,8 @@ export async function deleteTodoSynced(
 // オフライン中に積まれた sync-queue を順番に消化する。
 // HTTP エラー / ネットワーク失敗はいずれもユーザーの変更を失わないようキューに残す。
 // 後続 op は前の op に依存する可能性があるため、最初の失敗で停止する。
+// ユーザー通知はこの関数では行わない。呼び出し元 (自動同期 / 手動再試行) で
+// 文脈に応じて出し分ける。
 export async function processSyncQueue(): Promise<SyncQueueResult> {
   const ops = await getPendingSyncOps()
   let processed = 0
@@ -272,12 +274,7 @@ export async function processSyncQueue(): Promise<SyncQueueResult> {
       await runQueuedOp(op)
       await dequeueSyncOp(op.id)
       processed++
-    } catch (e) {
-      if (e instanceof HttpError) {
-        toast.error(`オフライン中の変更の同期に失敗しました (HTTP ${e.status})`)
-      } else {
-        toast.error('オフライン中の変更の同期に失敗しました')
-      }
+    } catch {
       return { processed, failed: true }
     }
   }

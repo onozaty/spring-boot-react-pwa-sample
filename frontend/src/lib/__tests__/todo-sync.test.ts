@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { IDBFactory } from 'fake-indexeddb'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../../test/server'
 
 // 各テスト前にモジュールキャッシュ (todo-store の dbPromise) を破棄し、
@@ -12,10 +12,15 @@ beforeEach(() => {
   indexedDB = new IDBFactory()
 })
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 async function getModules() {
   const store = await import('../todo-store')
   const sync = await import('../todo-sync')
-  return { ...store, ...sync }
+  const sonner = await import('sonner')
+  return { ...store, ...sync, toast: sonner.toast }
 }
 
 // MSW で /api/todos POST をハンドルし、受け取ったリクエストボディを記録する。
@@ -128,8 +133,14 @@ describe('processSyncQueue: オフライン中の create + toggle 後にオン�
 
 describe('processSyncQueue: 同期失敗時', () => {
   it('HTTP エラー時は失敗した op をキューに残し、後続 op を処理しない', async () => {
-    const { upsertTodo, enqueueSyncOp, getPendingSyncOps, processSyncQueue } =
-      await getModules()
+    const {
+      upsertTodo,
+      enqueueSyncOp,
+      getPendingSyncOps,
+      processSyncQueue,
+      toast,
+    } = await getModules()
+    const errorSpy = vi.spyOn(toast, 'error').mockReturnValue('')
     let postCount = 0
     let putCount = 0
     server.use(
@@ -178,11 +189,19 @@ describe('processSyncQueue: 同期失敗時', () => {
     expect(postCount).toBe(1)
     expect(putCount).toBe(0)
     expect(await getPendingSyncOps()).toHaveLength(2)
+    // 通知は呼び出し元の責務。processSyncQueue は toast を出さない。
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('ネットワーク失敗時も失敗した op をキューに残す', async () => {
-    const { upsertTodo, enqueueSyncOp, getPendingSyncOps, processSyncQueue } =
-      await getModules()
+    const {
+      upsertTodo,
+      enqueueSyncOp,
+      getPendingSyncOps,
+      processSyncQueue,
+      toast,
+    } = await getModules()
+    const errorSpy = vi.spyOn(toast, 'error').mockReturnValue('')
     server.use(
       http.post('*/api/todos', () => {
         throw new TypeError('network error')
@@ -208,6 +227,8 @@ describe('processSyncQueue: 同期失敗時', () => {
 
     expect(result).toEqual({ processed: 0, failed: true })
     expect(await getPendingSyncOps()).toHaveLength(1)
+    // 通知は呼び出し元の責務。processSyncQueue は toast を出さない。
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })
 

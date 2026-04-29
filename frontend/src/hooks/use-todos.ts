@@ -92,7 +92,12 @@ export function useSyncQueueActions() {
     onSuccess: (result) => {
       queryClient.setQueryData(syncFailureQueryKey, result.failed)
       refreshQueries()
-      if (result.failed) return
+      if (result.failed) {
+        // ユーザーが明示的に押した「再試行」なので失敗をその場で通知する。
+        // (自動同期の失敗はバナーで伝えるため通知しない)
+        toast.error('オフライン中の変更の同期に失敗しました')
+        return
+      }
       if (result.processed > 0) {
         toast.success('オフライン中の変更を同期しました')
       }
